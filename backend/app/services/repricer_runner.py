@@ -52,7 +52,11 @@ class RepricerRunner:
 
                     if result.changed:
                         # 严格通过 Ozon API 执行真实调价
-                        await client.update_price(product.ozon_product_id, product.current_price)
+                        await client.update_price(
+                            product.ozon_product_id,
+                            product.current_price,
+                            offer_id=product.sku,
+                        )
                     else:
                         product.current_price = old_price
 

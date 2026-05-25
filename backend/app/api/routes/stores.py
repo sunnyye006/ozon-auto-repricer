@@ -61,6 +61,8 @@ async def sync_store_products(store_id: int, db: AsyncSession = Depends(get_db))
         current_price = Decimal(str(item.get("price") or "0"))
         if current_price <= 0:
             continue
+        net_price_raw = item.get("net_price")
+        cost_price = Decimal(str(net_price_raw)) if net_price_raw not in (None, "", "0") else current_price
 
         product = await db.scalar(
             select(Product).where(Product.store_id == store.id, Product.ozon_product_id == product_id)
@@ -68,6 +70,9 @@ async def sync_store_products(store_id: int, db: AsyncSession = Depends(get_db))
         if product:
             product.name = name
             product.current_price = current_price
+            product.sku = item.get("offer_id") or product.sku
+            if net_price_raw not in (None, "", "0"):
+                product.cost_price = cost_price
         else:
             db.add(
                 Product(
@@ -76,7 +81,7 @@ async def sync_store_products(store_id: int, db: AsyncSession = Depends(get_db))
                     sku=item.get("offer_id"),
                     name=name,
                     current_price=current_price,
-                    cost_price=current_price,
+                    cost_price=cost_price,
                     auto_reprice_enabled=True,
                 )
             )
