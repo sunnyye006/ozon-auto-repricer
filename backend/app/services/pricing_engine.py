@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.events import event_bus
 from app.models import PriceEvent, Product, RepricingState, Store
+from app.services.app_settings_service import RepricingRules
 
 
 TWO_DP = Decimal("0.01")
@@ -22,9 +23,6 @@ class EngineResult:
 
 
 class PricingEngine:
-    def __init__(self, step: Decimal) -> None:
-        self.step = step
-
     async def process_product(
         self,
         db: AsyncSession,
@@ -32,13 +30,14 @@ class PricingEngine:
         product: Product,
         state: RepricingState,
         competitor_prices: list[Decimal],
+        rules: RepricingRules,
     ) -> EngineResult:
         now = datetime.now(timezone.utc)
         state.last_scan_at = now
         state.competitor_count = len(competitor_prices)
 
         if not competitor_prices:
-            if state.in_round and state.round_original_price is not None:
+            if rules.restore_when_no_competitors and state.in_round and state.round_original_price is not None:
                 return await self._restore_original_price(db, store, product, state)
             return EngineResult(changed=False, reason="no_competitors")
 
@@ -52,13 +51,16 @@ class PricingEngine:
         if max_competitor_price <= product.current_price:
             return EngineResult(changed=False, reason="not_above_us")
 
-        # 对手价高于我方，继续降价，但不低于成本
-        next_price = q(product.current_price - self.step)
-        if next_price <= product.cost_price:
-            next_price = q(product.cost_price)
+        # 对手价高于我方，按规则降价，且不能突破成本保护与单轮跌幅限制
+        next_price = q(product.current_price - rules.price_step)
+        floor_by_cost = q(product.cost_price + rules.cost_buffer)
+        floor_by_round = q(state.round_original_price * (Decimal("1.0") - Decimal(str(rules.max_round_drop_percent / 100))))
+        hard_floor = max(floor_by_cost, floor_by_round)
+        if next_price <= hard_floor:
+            next_price = hard_floor
             state.floor_reached = True
 
-        if next_price == product.current_price:
+        if next_price >= product.current_price:
             return EngineResult(changed=False, reason="already_at_floor")
 
         old_price = product.current_price

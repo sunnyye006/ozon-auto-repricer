@@ -35,7 +35,16 @@ const MOCK_EVENTS: PriceEvent[] = [
   { platform: "Ozon", store_name: "Ozon RU 主店", product_name: "蓝牙耳机 Pro", direction: "↓", timestamp: "2026-05-13T20:44:21+08:00", old_price: "1299.10", new_price: "1299.00" },
 ];
 
-const MOCK_SETTINGS: ToolSettings = { scan_interval_minutes: 10, preset_options: [5, 10, 20] };
+const MOCK_SETTINGS: ToolSettings = {
+  scan_interval_minutes: 10,
+  preset_options: [5, 10, 20],
+  repricing_rules: {
+    price_step: "0.10",
+    cost_buffer: "0.00",
+    max_round_drop_percent: 30,
+    restore_when_no_competitors: true,
+  },
+};
 
 export default function App() {
   const [stats, setStats] = useState<DashboardStats | null>(null);

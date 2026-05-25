@@ -62,9 +62,24 @@ class PriceEventOut(BaseModel):
         from_attributes = True
 
 
+class RepricingRulesOut(BaseModel):
+    price_step: Decimal = Field(gt=0)
+    cost_buffer: Decimal = Field(ge=0)
+    max_round_drop_percent: float = Field(gt=0, le=100)
+    restore_when_no_competitors: bool
+
+
+class RepricingRulesUpdate(BaseModel):
+    price_step: Decimal = Field(gt=0)
+    cost_buffer: Decimal = Field(ge=0)
+    max_round_drop_percent: float = Field(gt=0, le=100)
+    restore_when_no_competitors: bool
+
+
 class ScanIntervalSettingsOut(BaseModel):
     scan_interval_minutes: int
     preset_options: list[int]
+    repricing_rules: RepricingRulesOut
 
 
 class ScanIntervalSettingsUpdate(BaseModel):

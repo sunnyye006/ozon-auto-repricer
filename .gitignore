@@ -18,3 +18,7 @@ frontend/dist/
 # Local helper/cache files
 .local-bin/
 .pnpm/
+supabase/.temp/
+
+# Deploy tooling (local only)
+.railway/

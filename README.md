@@ -62,6 +62,11 @@
   - 若降到成本价：立刻止损并保持成本价
 - 恢复逻辑：
   - 若跟卖列表为空，且处于本轮调价状态：恢复 `round_original_price`
+- 规则可配置（右上角设置面板）：
+  - 降价步长 `price_step`
+  - 成本缓冲 `cost_buffer`
+  - 单轮最大降幅 `max_round_drop_percent`
+  - 对手退出后是否恢复 `restore_when_no_competitors`
 
 ### 2.4 技术实现要求
 
@@ -234,3 +239,8 @@
 - 设置：
   - `GET /api/settings`
   - `PUT /api/settings/scan-interval`
+  - `PUT /api/settings/repricing-rules`
+
+---
+
+详细云部署流程见：`DEPLOY_GUIDE.md`（Supabase + Railway + Vercel）。
