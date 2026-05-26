@@ -47,12 +47,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ minutes }),
     }),
-  updateRepricingRules: (payload: {
-    price_step: number;
-    cost_buffer: number;
-    max_round_drop_percent: number;
-    restore_when_no_competitors: boolean;
-  }) =>
+  updateRepricingRules: (payload: { price_step: number }) =>
     request<ToolSettings>("/settings/repricing-rules", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },

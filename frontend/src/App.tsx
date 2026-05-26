@@ -39,10 +39,8 @@ const MOCK_SETTINGS: ToolSettings = {
   scan_interval_minutes: 10,
   preset_options: [5, 10, 20],
   repricing_rules: {
-    price_step: "0.10",
-    cost_buffer: "0.00",
-    max_round_drop_percent: 30,
-    restore_when_no_competitors: true,
+    price_step: "0.1",
+    price_step_presets: ["0.1", "1"],
   },
 };
 

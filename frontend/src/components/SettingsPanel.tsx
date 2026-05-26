@@ -12,17 +12,28 @@ type Props = {
   hideTitle?: boolean;
 };
 
+const RULE_DESCRIPTIONS = [
+  {
+    title: "规则一 · 对手价低于我方时跟价",
+    body: "只要对手价低于你的售价，工具会把价格调到「对手价 − 跟价步长」。对手不继续降价则维持现价；对手再降则继续压价。触及商品成本价后停止调价。",
+  },
+  {
+    title: "规则二 · 部分对手退出后回调",
+    body: "跟价过程中若你已是全场最低价，有对手退出或不跟价但仍有其他卖家时，不会恢复跟价前原价，而是回调至「仍高于你的最低对手价 − 跟价步长」，在保持最低价的前提下尽量抬高利润。",
+  },
+  {
+    title: "规则三 · 无竞争对手",
+    body: "同一链接没有任何竞争参考价时，价格保持不变。",
+  },
+];
+
 export function SettingsPanel({ stores, toolSettings, onStoreChanged, onSettingsChanged, hideTitle = false }: Props) {
   const presetOptions = toolSettings?.preset_options ?? [5, 10, 20];
+  const priceStepPresets = toolSettings?.repricing_rules.price_step_presets ?? ["0.1", "1"];
   const [selectedOption, setSelectedOption] = useState<string>("10");
   const [customMinutes, setCustomMinutes] = useState<string>("");
   const [saving, setSaving] = useState(false);
-  const [rulesDraft, setRulesDraft] = useState({
-    price_step: "0.10",
-    cost_buffer: "0.00",
-    max_round_drop_percent: "30",
-    restore_when_no_competitors: true,
-  });
+  const [priceStep, setPriceStep] = useState<string>("0.1");
   const [savingRules, setSavingRules] = useState(false);
 
   const isCurrentPreset = useMemo(
@@ -44,12 +55,7 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onSettings
 
   useEffect(() => {
     if (!toolSettings) return;
-    setRulesDraft({
-      price_step: toolSettings.repricing_rules.price_step ?? "0.10",
-      cost_buffer: toolSettings.repricing_rules.cost_buffer ?? "0.00",
-      max_round_drop_percent: String(toolSettings.repricing_rules.max_round_drop_percent ?? 30),
-      restore_when_no_competitors: Boolean(toolSettings.repricing_rules.restore_when_no_competitors),
-    });
+    setPriceStep(String(toolSettings.repricing_rules.price_step ?? "0.1"));
   }, [toolSettings]);
 
   async function saveInterval() {
@@ -76,31 +82,14 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onSettings
   }
 
   async function saveRules() {
-    const payload = {
-      price_step: Number(rulesDraft.price_step),
-      cost_buffer: Number(rulesDraft.cost_buffer),
-      max_round_drop_percent: Number(rulesDraft.max_round_drop_percent),
-      restore_when_no_competitors: rulesDraft.restore_when_no_competitors,
-    };
-    if (!Number.isFinite(payload.price_step) || payload.price_step <= 0) {
-      alert("降价步长必须大于 0");
-      return;
-    }
-    if (!Number.isFinite(payload.cost_buffer) || payload.cost_buffer < 0) {
-      alert("成本缓冲不能小于 0");
-      return;
-    }
-    if (
-      !Number.isFinite(payload.max_round_drop_percent) ||
-      payload.max_round_drop_percent <= 0 ||
-      payload.max_round_drop_percent > 100
-    ) {
-      alert("单轮最大降幅必须在 0-100 之间");
+    const step = Number(priceStep);
+    if (!Number.isFinite(step) || step <= 0) {
+      alert("跟价步长必须大于 0");
       return;
     }
     setSavingRules(true);
     try {
-      const latest = await api.updateRepricingRules(payload);
+      const latest = await api.updateRepricingRules({ price_step: step });
       onSettingsChanged(latest);
     } finally {
       setSavingRules(false);
@@ -169,65 +158,74 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onSettings
 
       <div style={{ border: "1px solid #deebff", borderRadius: 8, padding: 12, background: "rgba(255,255,255,0.88)" }}>
         <h3 style={{ marginTop: 0, color: "#145f9e" }}>自动调价规则</h3>
-        <p style={{ marginTop: 0, color: "#666" }}>在这里可直接调节降价策略和止损边界，保存后后端下一轮扫描立即生效。</p>
-        <div style={{ display: "grid", gap: 8 }}>
-          <label style={{ display: "grid", gap: 4, color: "#415472", fontSize: 13 }}>
-            降价步长（每轮）
+        <p style={{ marginTop: 0, color: "#666", fontSize: 13, lineHeight: 1.5 }}>
+          以下三条为固定跟卖逻辑；你只需设置「比对手低多少卢布」。成本价在商品列表中为每个 SKU 单独维护，触及后停止跟价。
+        </p>
+
+        <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+          {RULE_DESCRIPTIONS.map((rule) => (
+            <div
+              key={rule.title}
+              style={{
+                border: "1px solid #e8f0ff",
+                borderRadius: 8,
+                padding: "8px 10px",
+                background: "#f8fbff",
+                fontSize: 13,
+                lineHeight: 1.55,
+              }}
+            >
+              <b style={{ color: "#1d4f91" }}>{rule.title}</b>
+              <p style={{ margin: "4px 0 0", color: "#415472" }}>{rule.body}</p>
+            </div>
+          ))}
+        </div>
+
+        <label style={{ display: "grid", gap: 6, color: "#415472", fontSize: 13 }}>
+          跟价步长（比对手低多少，单位：卢布）
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {priceStepPresets.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setPriceStep(String(preset))}
+                style={{
+                  border: priceStep === String(preset) ? "1px solid #4f8cff" : "1px solid #c5d7ff",
+                  borderRadius: 7,
+                  padding: "6px 12px",
+                  background: priceStep === String(preset) ? "#eef4ff" : "#fff",
+                  color: priceStep === String(preset) ? "#2b5fcc" : "#415472",
+                  cursor: "pointer",
+                }}
+              >
+                {preset} ₽
+              </button>
+            ))}
             <input
               type="number"
               min={0.01}
               step={0.01}
-              value={rulesDraft.price_step}
-              onChange={(e) => setRulesDraft((prev) => ({ ...prev, price_step: e.target.value }))}
-              style={{ border: "1px solid #c5d7ff", borderRadius: 6, padding: "6px 8px" }}
+              value={priceStep}
+              onChange={(e) => setPriceStep(e.target.value)}
+              style={{ border: "1px solid #c5d7ff", borderRadius: 6, padding: "6px 8px", width: 90 }}
             />
-          </label>
-          <label style={{ display: "grid", gap: 4, color: "#415472", fontSize: 13 }}>
-            成本缓冲（成本价上方保底）
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={rulesDraft.cost_buffer}
-              onChange={(e) => setRulesDraft((prev) => ({ ...prev, cost_buffer: e.target.value }))}
-              style={{ border: "1px solid #c5d7ff", borderRadius: 6, padding: "6px 8px" }}
-            />
-          </label>
-          <label style={{ display: "grid", gap: 4, color: "#415472", fontSize: 13 }}>
-            单轮最大降幅（%）
-            <input
-              type="number"
-              min={1}
-              max={100}
-              step={0.1}
-              value={rulesDraft.max_round_drop_percent}
-              onChange={(e) => setRulesDraft((prev) => ({ ...prev, max_round_drop_percent: e.target.value }))}
-              style={{ border: "1px solid #c5d7ff", borderRadius: 6, padding: "6px 8px" }}
-            />
-          </label>
-          <label style={{ display: "inline-flex", gap: 8, alignItems: "center", color: "#415472", fontSize: 13 }}>
-            <input
-              type="checkbox"
-              checked={rulesDraft.restore_when_no_competitors}
-              onChange={(e) => setRulesDraft((prev) => ({ ...prev, restore_when_no_competitors: e.target.checked }))}
-            />
-            对手退出后恢复本轮原价
-          </label>
-          <button
-            onClick={saveRules}
-            disabled={savingRules}
-            style={{
-              justifySelf: "start",
-              border: "1px solid #4f8cff",
-              borderRadius: 7,
-              padding: "6px 12px",
-              color: "#fff",
-              background: "linear-gradient(135deg, #4f8cff, #6d5efc)",
-            }}
-          >
-            保存调价规则
-          </button>
-        </div>
+          </div>
+        </label>
+
+        <button
+          onClick={saveRules}
+          disabled={savingRules}
+          style={{
+            marginTop: 10,
+            border: "1px solid #4f8cff",
+            borderRadius: 7,
+            padding: "6px 12px",
+            color: "#fff",
+            background: "linear-gradient(135deg, #4f8cff, #6d5efc)",
+          }}
+        >
+          保存调价规则
+        </button>
       </div>
 
       <StoreManager stores={stores} onStoreChanged={onStoreChanged} />

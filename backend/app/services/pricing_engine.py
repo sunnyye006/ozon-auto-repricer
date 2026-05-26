@@ -23,6 +23,16 @@ class EngineResult:
 
 
 class PricingEngine:
+    """
+    跟卖调价三规则：
+
+    规则一：存在对手价低于我方 → 压价至「最低对手价 − 步长」；已到位且对手未再降则维持；
+            对手再降则继续压价；触及成本价后停止。
+    规则二：跟价过程中我方已是最低价，部分对手退出或不跟价但仍有其他对手 →
+            回调至「仍高于我方的最低对手价 − 步长」，始终保持全场最低价。
+    规则三：链接内无任何竞争参考价 → 价格不变。
+    """
+
     async def process_product(
         self,
         db: AsyncSession,
@@ -35,76 +45,116 @@ class PricingEngine:
         now = datetime.now(timezone.utc)
         state.last_scan_at = now
         state.competitor_count = len(competitor_prices)
+        floor = q(product.cost_price)
 
+        # 规则三：无竞争对手
         if not competitor_prices:
-            if rules.restore_when_no_competitors and state.in_round and state.round_original_price is not None:
-                return await self._restore_original_price(db, store, product, state)
-            return EngineResult(changed=False, reason="no_competitors")
+            if state.in_round:
+                state.in_round = False
+                state.round_original_price = None
+                state.floor_reached = False
+            return EngineResult(changed=False, reason="no_competitors_unchanged")
 
-        # 进入本轮调价，记录最初价格
+        min_competitor = min(competitor_prices)
+
+        # 规则一：对手价低于我方 → 跟价压价
+        if min_competitor < product.current_price:
+            if not state.in_round:
+                state.in_round = True
+                state.round_original_price = product.current_price
+                state.floor_reached = False
+            return await self._decrease_to_target(
+                db, store, product, state, target=self._undercut_target(min_competitor, rules.price_step, floor)
+            )
+
+        # 我方已不高于任何对手（当前为最低价或持平）
         if not state.in_round:
-            state.in_round = True
-            state.round_original_price = product.current_price
-            state.floor_reached = False
+            return EngineResult(changed=False, reason="already_lowest_idle")
 
-        max_competitor_price = max(competitor_prices)
-        if max_competitor_price <= product.current_price:
-            return EngineResult(changed=False, reason="not_above_us")
+        competitors_above = [p for p in competitor_prices if p > product.current_price]
 
-        # 对手价高于我方，按规则降价，且不能突破成本保护与单轮跌幅限制
-        next_price = q(product.current_price - rules.price_step)
-        floor_by_cost = q(product.cost_price + rules.cost_buffer)
-        floor_by_round = q(state.round_original_price * (Decimal("1.0") - Decimal(str(rules.max_round_drop_percent / 100))))
-        hard_floor = max(floor_by_cost, floor_by_round)
-        if next_price <= hard_floor:
-            next_price = hard_floor
+        # 规则二：仍有对手，且存在高于我方的报价 → 回调至其下方一步，保持最低价
+        if competitors_above:
+            min_above = min(competitors_above)
+            target = self._undercut_target(min_above, rules.price_step, floor)
+            if target > product.current_price:
+                return await self._raise_to_target(
+                    db, store, product, state, target=target, note="raise_to_stay_lowest"
+                )
+            return EngineResult(changed=False, reason="already_optimal_below_next_competitor")
+
+        # 与最低对手持平 → 再低一步以严格保持最低价
+        if min_competitor == product.current_price:
+            target = self._undercut_target(min_competitor, rules.price_step, floor)
+            if target < product.current_price:
+                return await self._decrease_to_target(db, store, product, state, target=target)
+
+        return EngineResult(changed=False, reason="maintain_lowest_position")
+
+    def _undercut_target(self, competitor_price: Decimal, step: Decimal, floor: Decimal) -> Decimal:
+        target = q(competitor_price - step)
+        if target < floor:
+            return floor
+        return target
+
+    async def _decrease_to_target(
+        self,
+        db: AsyncSession,
+        store: Store,
+        product: Product,
+        state: RepricingState,
+        *,
+        target: Decimal,
+    ) -> EngineResult:
+        floor = q(product.cost_price)
+        if target <= floor and product.current_price <= floor:
+            state.floor_reached = True
+            return EngineResult(changed=False, reason="at_cost_floor")
+
+        if product.current_price <= target:
+            return EngineResult(changed=False, reason="maintain_undercut_position")
+
+        if target == floor:
             state.floor_reached = True
 
-        if next_price >= product.current_price:
-            return EngineResult(changed=False, reason="already_at_floor")
-
         old_price = product.current_price
-        product.current_price = next_price
+        product.current_price = target
         await self._emit_event(
             db=db,
             store=store,
             product=product,
             direction="↓",
             old_price=old_price,
-            new_price=next_price,
-            note="competitor_above_us",
+            new_price=target,
+            note="undercut_competitor",
         )
-        return EngineResult(changed=True, reason="decrease")
+        return EngineResult(changed=True, reason="undercut")
 
-    async def _restore_original_price(
+    async def _raise_to_target(
         self,
         db: AsyncSession,
         store: Store,
         product: Product,
         state: RepricingState,
+        *,
+        target: Decimal,
+        note: str,
     ) -> EngineResult:
-        assert state.round_original_price is not None
+        if target <= product.current_price:
+            return EngineResult(changed=False, reason="raise_not_needed")
+
         old_price = product.current_price
-        restored_price = q(state.round_original_price)
-
-        state.in_round = False
-        state.floor_reached = False
-        state.round_original_price = None
-
-        if restored_price == old_price:
-            return EngineResult(changed=False, reason="already_original")
-
-        product.current_price = restored_price
+        product.current_price = target
         await self._emit_event(
             db=db,
             store=store,
             product=product,
             direction="↑",
             old_price=old_price,
-            new_price=restored_price,
-            note="competitors_left_restore_original",
+            new_price=target,
+            note=note,
         )
-        return EngineResult(changed=True, reason="restore")
+        return EngineResult(changed=True, reason="raise")
 
     async def _emit_event(
         self,

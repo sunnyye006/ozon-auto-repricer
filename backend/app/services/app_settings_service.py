@@ -10,22 +10,18 @@ from app.models import AppSetting
 SCAN_INTERVAL_KEY = "scan_interval_minutes"
 REPRICING_RULES_KEY = "repricing_rules_json"
 
+PRICE_STEP_PRESETS = [Decimal("0.1"), Decimal("1.0")]
+
 
 @dataclass
 class RepricingRules:
+    """可配置项：跟价时比对手低多少（卢布）。"""
+
     price_step: Decimal
-    cost_buffer: Decimal
-    max_round_drop_percent: float
-    restore_when_no_competitors: bool
 
 
 def default_repricing_rules() -> RepricingRules:
-    return RepricingRules(
-        price_step=Decimal(str(settings.price_step)),
-        cost_buffer=Decimal("0.00"),
-        max_round_drop_percent=30.0,
-        restore_when_no_competitors=True,
-    )
+    return RepricingRules(price_step=Decimal(str(settings.price_step)))
 
 
 async def get_scan_interval_minutes(db: AsyncSession) -> int:
@@ -39,13 +35,8 @@ async def get_scan_interval_minutes(db: AsyncSession) -> int:
         return settings.scan_interval_minutes
 
 
-def repricing_rules_to_dict(rules: RepricingRules) -> dict[str, str | float | bool]:
-    return {
-        "price_step": str(rules.price_step),
-        "cost_buffer": str(rules.cost_buffer),
-        "max_round_drop_percent": float(rules.max_round_drop_percent),
-        "restore_when_no_competitors": bool(rules.restore_when_no_competitors),
-    }
+def repricing_rules_to_dict(rules: RepricingRules) -> dict[str, str]:
+    return {"price_step": str(rules.price_step)}
 
 
 def parse_repricing_rules(raw: dict | None) -> RepricingRules:
@@ -55,25 +46,13 @@ def parse_repricing_rules(raw: dict | None) -> RepricingRules:
 
     try:
         price_step = Decimal(str(raw.get("price_step", defaults.price_step)))
-        cost_buffer = Decimal(str(raw.get("cost_buffer", defaults.cost_buffer)))
-        max_round_drop_percent = float(raw.get("max_round_drop_percent", defaults.max_round_drop_percent))
-        restore_when_no_competitors = bool(raw.get("restore_when_no_competitors", defaults.restore_when_no_competitors))
     except Exception:
         return defaults
 
     if price_step <= 0:
         price_step = defaults.price_step
-    if cost_buffer < 0:
-        cost_buffer = defaults.cost_buffer
-    if not (0 < max_round_drop_percent <= 100):
-        max_round_drop_percent = defaults.max_round_drop_percent
 
-    return RepricingRules(
-        price_step=price_step,
-        cost_buffer=cost_buffer,
-        max_round_drop_percent=max_round_drop_percent,
-        restore_when_no_competitors=restore_when_no_competitors,
-    )
+    return RepricingRules(price_step=price_step)
 
 
 async def get_repricing_rules(db: AsyncSession) -> RepricingRules:

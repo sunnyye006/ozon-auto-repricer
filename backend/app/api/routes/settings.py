@@ -5,6 +5,7 @@ from app.core.db import get_db
 from app.models import AppSetting
 from app.schemas import RepricingRulesOut, RepricingRulesUpdate, ScanIntervalSettingsOut, ScanIntervalSettingsUpdate
 from app.services.app_settings_service import (
+    PRICE_STEP_PRESETS,
     SCAN_INTERVAL_KEY,
     RepricingRules,
     get_repricing_rules,
@@ -18,6 +19,13 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 PRESET_OPTIONS = [5, 10, 20]
 
 
+def _rules_out(rules: RepricingRules) -> RepricingRulesOut:
+    return RepricingRulesOut(
+        price_step=rules.price_step,
+        price_step_presets=PRICE_STEP_PRESETS,
+    )
+
+
 @router.get("", response_model=ScanIntervalSettingsOut)
 async def get_settings(db: AsyncSession = Depends(get_db)) -> ScanIntervalSettingsOut:
     minutes = await get_scan_interval_minutes(db)
@@ -25,12 +33,7 @@ async def get_settings(db: AsyncSession = Depends(get_db)) -> ScanIntervalSettin
     return ScanIntervalSettingsOut(
         scan_interval_minutes=minutes,
         preset_options=PRESET_OPTIONS,
-        repricing_rules=RepricingRulesOut(
-            price_step=rules.price_step,
-            cost_buffer=rules.cost_buffer,
-            max_round_drop_percent=rules.max_round_drop_percent,
-            restore_when_no_competitors=rules.restore_when_no_competitors,
-        ),
+        repricing_rules=_rules_out(rules),
     )
 
 
@@ -51,12 +54,7 @@ async def update_scan_interval(
     return ScanIntervalSettingsOut(
         scan_interval_minutes=payload.minutes,
         preset_options=PRESET_OPTIONS,
-        repricing_rules=RepricingRulesOut(
-            price_step=rules.price_step,
-            cost_buffer=rules.cost_buffer,
-            max_round_drop_percent=rules.max_round_drop_percent,
-            restore_when_no_competitors=rules.restore_when_no_competitors,
-        ),
+        repricing_rules=_rules_out(rules),
     )
 
 
@@ -65,22 +63,12 @@ async def update_repricing_rules(
     payload: RepricingRulesUpdate,
     db: AsyncSession = Depends(get_db),
 ) -> ScanIntervalSettingsOut:
-    rules = RepricingRules(
-        price_step=payload.price_step,
-        cost_buffer=payload.cost_buffer,
-        max_round_drop_percent=payload.max_round_drop_percent,
-        restore_when_no_competitors=payload.restore_when_no_competitors,
-    )
+    rules = RepricingRules(price_step=payload.price_step)
     await save_repricing_rules(db, rules)
     minutes = await get_scan_interval_minutes(db)
     await db.commit()
     return ScanIntervalSettingsOut(
         scan_interval_minutes=minutes,
         preset_options=PRESET_OPTIONS,
-        repricing_rules=RepricingRulesOut(
-            price_step=rules.price_step,
-            cost_buffer=rules.cost_buffer,
-            max_round_drop_percent=rules.max_round_drop_percent,
-            restore_when_no_competitors=rules.restore_when_no_competitors,
-        ),
+        repricing_rules=_rules_out(rules),
     )

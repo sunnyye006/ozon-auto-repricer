@@ -64,16 +64,11 @@ class PriceEventOut(BaseModel):
 
 class RepricingRulesOut(BaseModel):
     price_step: Decimal = Field(gt=0)
-    cost_buffer: Decimal = Field(ge=0)
-    max_round_drop_percent: float = Field(gt=0, le=100)
-    restore_when_no_competitors: bool
+    price_step_presets: list[Decimal] = Field(default_factory=lambda: [Decimal("0.1"), Decimal("1.0")])
 
 
 class RepricingRulesUpdate(BaseModel):
     price_step: Decimal = Field(gt=0)
-    cost_buffer: Decimal = Field(ge=0)
-    max_round_drop_percent: float = Field(gt=0, le=100)
-    restore_when_no_competitors: bool
 
 
 class ScanIntervalSettingsOut(BaseModel):

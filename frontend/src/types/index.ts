@@ -40,8 +40,6 @@ export type ToolSettings = {
   preset_options: number[];
   repricing_rules: {
     price_step: string;
-    cost_buffer: string;
-    max_round_drop_percent: number;
-    restore_when_no_competitors: boolean;
+    price_step_presets: string[];
   };
 };
