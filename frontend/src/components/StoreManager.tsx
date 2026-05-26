@@ -13,11 +13,17 @@ export function StoreManager({ stores, onStoreChanged }: Props) {
   const [loading, setLoading] = useState(false);
 
   async function submit() {
+    if (!form.name.trim() || !form.client_id.trim() || !form.api_key.trim()) {
+      alert("请填写店铺名称、Client ID 和 API Key");
+      return;
+    }
     setLoading(true);
     try {
       await api.createStore(form);
       setForm({ name: "", client_id: "", api_key: "", api_base_url: "" });
       await onStoreChanged();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "绑定店铺失败");
     } finally {
       setLoading(false);
     }
@@ -26,8 +32,11 @@ export function StoreManager({ stores, onStoreChanged }: Props) {
   async function syncProducts(storeId: number) {
     setLoading(true);
     try {
-      await api.syncStoreProducts(storeId);
+      const result = await api.syncStoreProducts(storeId);
+      alert(`同步完成，共 ${result.synced} 个商品`);
       await onStoreChanged();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "同步商品失败");
     } finally {
       setLoading(false);
     }

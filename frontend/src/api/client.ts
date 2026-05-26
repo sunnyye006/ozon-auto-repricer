@@ -5,7 +5,21 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000/api";
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, init);
   if (!res.ok) {
-    throw new Error(await res.text());
+    const text = await res.text();
+    try {
+      const body = JSON.parse(text) as { detail?: string | { msg?: string }[] };
+      if (typeof body.detail === "string") {
+        throw new Error(body.detail);
+      }
+      if (Array.isArray(body.detail) && body.detail[0]?.msg) {
+        throw new Error(body.detail.map((item) => item.msg).join("; "));
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message !== text) {
+        throw err;
+      }
+    }
+    throw new Error(text || `请求失败 (${res.status})`);
   }
   return res.json() as Promise<T>;
 }
