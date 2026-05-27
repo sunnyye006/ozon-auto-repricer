@@ -22,3 +22,4 @@ supabase/.temp/
 
 # Deploy tooling (local only)
 .railway/
+.vercel

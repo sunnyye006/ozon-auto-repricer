@@ -4,8 +4,9 @@ import { api, createEventSource } from "./api/client";
 import { DataDimensions } from "./components/DataDimensions";
 import { EventAnalyticsPanel } from "./components/EventAnalyticsPanel";
 import { EventStream } from "./components/EventStream";
+import { FixedSettingsButton } from "./components/FixedSettingsButton";
 import { ProductTable } from "./components/ProductTable";
-import { SettingsPanel } from "./components/SettingsPanel";
+import { SettingsPage } from "./components/SettingsPage";
 import { StatsCards } from "./components/StatsCards";
 import type { DashboardStats, PriceEvent, Product, Store, ToolSettings } from "./types";
 
@@ -83,6 +84,17 @@ export default function App() {
     }
   }
 
+  async function reloadProducts() {
+    try {
+      const productsData = await api.getProducts();
+      setProducts(productsData);
+      const statsData = await api.getStats();
+      setStats(statsData);
+    } catch {
+      await reloadAll();
+    }
+  }
+
   useEffect(() => {
     void reloadAll();
     const source = createEventSource();
@@ -100,121 +112,80 @@ export default function App() {
     return () => source.close();
   }, []);
 
+  useEffect(() => {
+    document.body.style.overflow = settingsOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [settingsOpen]);
+
   return (
     <>
-      <main
-        style={{
-          maxWidth: 1360,
-          margin: "0 auto",
-          padding: 20,
-          display: "grid",
-          gap: 16,
-          background: "linear-gradient(180deg, #f0f8ff 0%, #f8fbff 35%, #f9f5ff 100%)",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h1 style={{ marginBottom: 0, color: "#12263f" }}>Ozon 自动跟卖调价工具</h1>
-          {usingMockData && (
-            <span
-              style={{
-                border: "1px solid #ffd699",
-                background: "#fff7e8",
-                color: "#a15d00",
-                borderRadius: 8,
-                padding: "4px 10px",
-                fontSize: 12,
-                fontWeight: 600,
-              }}
-            >
-              演示数据模式
-            </span>
-          )}
-        </div>
-        <StatsCards stats={stats} />
-
-        <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
-          <DataDimensions stats={stats} events={sortedEvents.slice(0, 100)} products={products} stores={stores} />
-        </section>
-
-        <ProductTable products={products} />
-
-        <section
+      {!settingsOpen && (
+        <main
           style={{
+            maxWidth: 1360,
+            margin: "0 auto",
+            padding: 20,
             display: "grid",
-            gridTemplateColumns: "minmax(420px, 620px) minmax(480px, 1fr)",
             gap: 16,
-            alignItems: "start",
+            background: "linear-gradient(180deg, #f0f8ff 0%, #f8fbff 35%, #f9f5ff 100%)",
+            minHeight: "100vh",
           }}
         >
-          <EventStream events={sortedEvents.slice(0, 100)} />
-          <EventAnalyticsPanel events={sortedEvents.slice(0, 100)} topRatio={stats?.top_price_capture_ratio ?? 0} />
-        </section>
-      </main>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingRight: 56 }}>
+            <h1 style={{ marginBottom: 0, color: "#12263f" }}>Ozon 自动跟卖调价工具</h1>
+            {usingMockData && (
+              <span
+                style={{
+                  border: "1px solid #ffd699",
+                  background: "#fff7e8",
+                  color: "#a15d00",
+                  borderRadius: 8,
+                  padding: "4px 10px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                演示数据模式
+              </span>
+            )}
+          </div>
+          <StatsCards stats={stats} />
 
-      <button
-        onClick={() => setSettingsOpen((prev) => !prev)}
-        aria-label={settingsOpen ? "关闭设置" : "打开设置"}
-        title={settingsOpen ? "关闭设置" : "打开设置"}
-        style={{
-          position: "fixed",
-          top: 14,
-          right: 14,
-          zIndex: 999,
-          width: 42,
-          height: 42,
-          border: "1px solid #8bb8ff",
-          borderRadius: 10,
-          background: "linear-gradient(135deg, #4f8cff, #6d5efc)",
-          color: "#fff",
-          cursor: "pointer",
-          fontSize: 22,
-          lineHeight: "22px",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        ⚙
-      </button>
+          <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
+            <DataDimensions stats={stats} events={sortedEvents.slice(0, 100)} products={products} stores={stores} />
+          </section>
+
+          <ProductTable products={products} stores={stores} />
+
+          <section
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(420px, 620px) minmax(480px, 1fr)",
+              gap: 16,
+              alignItems: "start",
+            }}
+          >
+            <EventStream events={sortedEvents.slice(0, 100)} />
+            <EventAnalyticsPanel events={sortedEvents.slice(0, 100)} topRatio={stats?.top_price_capture_ratio ?? 0} />
+          </section>
+        </main>
+      )}
 
       {settingsOpen && (
-        <div
-          style={{
-            position: "fixed",
-            top: 62,
-            right: 14,
-            zIndex: 998,
-            width: 410,
-            maxWidth: "calc(100vw - 28px)",
-            maxHeight: "calc(100vh - 76px)",
-            overflow: "auto",
-            background: "linear-gradient(180deg, #f4f9ff 0%, #f7f3ff 100%)",
-            border: "1px solid #d7e7ff",
-            borderRadius: 10,
-            boxShadow: "0 12px 32px rgba(2, 6, 23, 0.18)",
-            padding: 10,
-            boxSizing: "border-box",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <b>设置</b>
-            <button
-              onClick={() => setSettingsOpen(false)}
-              style={{ border: "1px solid #d9d9d9", borderRadius: 6, background: "#fff", padding: "4px 8px" }}
-            >
-              关闭
-            </button>
-          </div>
-          <SettingsPanel
-            stores={stores}
-            toolSettings={toolSettings}
-            onStoreChanged={reloadAll}
-            onSettingsChanged={setToolSettings}
-            hideTitle
-          />
-        </div>
+        <SettingsPage
+          stores={stores}
+          products={products}
+          toolSettings={toolSettings}
+          onClose={() => setSettingsOpen(false)}
+          onStoreChanged={reloadAll}
+          onProductsChanged={reloadProducts}
+          onSettingsChanged={setToolSettings}
+        />
       )}
+
+      <FixedSettingsButton isOpen={settingsOpen} onClick={() => setSettingsOpen((prev) => !prev)} />
     </>
   );
 }

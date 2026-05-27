@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
-import type { Store, ToolSettings } from "../types";
+import type { Product, Store, ToolSettings } from "../types";
+import { ProductCostManager } from "./ProductCostManager";
 import { StoreManager } from "./StoreManager";
 
 type Props = {
   stores: Store[];
+  products: Product[];
   toolSettings: ToolSettings | null;
   onStoreChanged: () => Promise<void>;
+  onProductsChanged: () => Promise<void>;
   onSettingsChanged: (settings: ToolSettings) => void;
-  hideTitle?: boolean;
 };
 
 const RULE_DESCRIPTIONS = [
@@ -27,7 +29,7 @@ const RULE_DESCRIPTIONS = [
   },
 ];
 
-export function SettingsPanel({ stores, toolSettings, onStoreChanged, onSettingsChanged, hideTitle = false }: Props) {
+export function SettingsPanel({ stores, products, toolSettings, onStoreChanged, onProductsChanged, onSettingsChanged }: Props) {
   const presetOptions = toolSettings?.preset_options ?? [5, 10, 20];
   const priceStepPresets = toolSettings?.repricing_rules.price_step_presets ?? ["0.1", "1"];
   const [selectedOption, setSelectedOption] = useState<string>("10");
@@ -97,19 +99,8 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onSettings
   }
 
   return (
-    <section
-      style={{
-        border: "1px solid #d8e4ff",
-        borderRadius: 10,
-        padding: 14,
-        display: "grid",
-        gap: 12,
-        background: "linear-gradient(180deg, #ffffff 0%, #f2f9ff 100%)",
-      }}
-    >
-      {!hideTitle && <h2 style={{ margin: 0 }}>设置</h2>}
-
-      <div style={{ border: "1px solid #deebff", borderRadius: 8, padding: 12, background: "rgba(255,255,255,0.88)" }}>
+    <div style={{ display: "grid", gap: 16 }}>
+      <div style={{ border: "1px solid #deebff", borderRadius: 10, padding: 14, background: "rgba(255,255,255,0.92)" }}>
         <h3 style={{ marginTop: 0, color: "#145f9e" }}>跟卖扫描频率</h3>
         <p style={{ marginTop: 0, color: "#666" }}>
           当前：每 {toolSettings?.scan_interval_minutes ?? "-"} 分钟扫描一次
@@ -156,10 +147,10 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onSettings
         )}
       </div>
 
-      <div style={{ border: "1px solid #deebff", borderRadius: 8, padding: 12, background: "rgba(255,255,255,0.88)" }}>
+      <div style={{ border: "1px solid #deebff", borderRadius: 10, padding: 14, background: "rgba(255,255,255,0.92)" }}>
         <h3 style={{ marginTop: 0, color: "#145f9e" }}>自动调价规则</h3>
         <p style={{ marginTop: 0, color: "#666", fontSize: 13, lineHeight: 1.5 }}>
-          以下三条为固定跟卖逻辑；你只需设置「比对手低多少卢布」。成本价在商品列表中为每个 SKU 单独维护，触及后停止跟价。
+          以下三条为固定跟卖逻辑；你只需设置「比对手低多少卢布」。成本价在下方「商品成本管理」中维护，保存后实时参与调价底线计算。
         </p>
 
         <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
@@ -229,6 +220,8 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onSettings
       </div>
 
       <StoreManager stores={stores} onStoreChanged={onStoreChanged} />
-    </section>
+
+      <ProductCostManager products={products} stores={stores} onProductsChanged={onProductsChanged} />
+    </div>
   );
 }

@@ -38,6 +38,16 @@ export const api = {
       method: "POST",
     }),
   getProducts: () => request<Product[]>("/products"),
+  updateProductCosts: (items: { product_id: number; cost_price: number }[]) =>
+    request<{ updated: number }>("/products/costs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(items),
+    }),
+  toggleAutoReprice: (productId: number, enabled: boolean) =>
+    request<{ product_id: number; enabled: boolean }>(`/products/${productId}/toggle?enabled=${enabled}`, {
+      method: "PUT",
+    }),
   getEvents: () => request<PriceEvent[]>("/dashboard/events?limit=50"),
   scanNow: () => request<{ ok: boolean }>("/dashboard/scan-now", { method: "POST" }),
   getSettings: () => request<ToolSettings>("/settings"),
