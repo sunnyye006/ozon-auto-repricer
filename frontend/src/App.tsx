@@ -4,7 +4,7 @@ import { api, createEventSource } from "./api/client";
 import { DataDimensions } from "./components/DataDimensions";
 import { EventAnalyticsPanel } from "./components/EventAnalyticsPanel";
 import { EventStream } from "./components/EventStream";
-import { FixedSettingsButton } from "./components/FixedSettingsButton";
+import { SettingsGearButton } from "./components/SettingsGearButton";
 import { ProductTable } from "./components/ProductTable";
 import { SettingsPage } from "./components/SettingsPage";
 import { StatsCards } from "./components/StatsCards";
@@ -112,13 +112,6 @@ export default function App() {
     return () => source.close();
   }, []);
 
-  useEffect(() => {
-    document.body.style.overflow = settingsOpen ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [settingsOpen]);
-
   return (
     <>
       {!settingsOpen && (
@@ -133,24 +126,35 @@ export default function App() {
             minHeight: "100vh",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingRight: 56 }}>
-            <h1 style={{ marginBottom: 0, color: "#12263f" }}>Ozon 自动跟卖调价工具</h1>
-            {usingMockData && (
-              <span
-                style={{
-                  border: "1px solid #ffd699",
-                  background: "#fff7e8",
-                  color: "#a15d00",
-                  borderRadius: 8,
-                  padding: "4px 10px",
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
-              >
-                演示数据模式
-              </span>
-            )}
-          </div>
+          <header
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <h1 style={{ margin: 0, color: "#12263f" }}>Ozon 自动跟卖调价工具</h1>
+              {usingMockData && (
+                <span
+                  style={{
+                    border: "1px solid #ffd699",
+                    background: "#fff7e8",
+                    color: "#a15d00",
+                    borderRadius: 8,
+                    padding: "4px 10px",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  演示数据模式
+                </span>
+              )}
+            </div>
+            <SettingsGearButton onClick={() => setSettingsOpen(true)} />
+          </header>
           <StatsCards stats={stats} />
 
           <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
@@ -184,8 +188,6 @@ export default function App() {
           onSettingsChanged={setToolSettings}
         />
       )}
-
-      <FixedSettingsButton isOpen={settingsOpen} onClick={() => setSettingsOpen((prev) => !prev)} />
     </>
   );
 }

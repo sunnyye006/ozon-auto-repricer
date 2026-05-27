@@ -21,12 +21,9 @@ export function SettingsPage({
   onSettingsChanged,
 }: Props) {
   return (
-    <div
+    <main
       style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9000,
-        overflow: "auto",
+        minHeight: "100vh",
         background: "linear-gradient(180deg, #eef6ff 0%, #f4f9ff 40%, #f8f5ff 100%)",
       }}
     >
@@ -34,7 +31,7 @@ export function SettingsPage({
         style={{
           maxWidth: 1120,
           margin: "0 auto",
-          padding: "72px 24px 32px",
+          padding: "24px 24px 32px",
           boxSizing: "border-box",
         }}
       >
@@ -80,6 +77,6 @@ export function SettingsPage({
           onSettingsChanged={onSettingsChanged}
         />
       </div>
-    </div>
+    </main>
   );
 }
