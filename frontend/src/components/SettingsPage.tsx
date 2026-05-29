@@ -1,9 +1,8 @@
-import type { Product, Store, ToolSettings } from "../types";
+import type { Store, ToolSettings } from "../types";
 import { SettingsPanel } from "./SettingsPanel";
 
 type Props = {
   stores: Store[];
-  products: Product[];
   toolSettings: ToolSettings | null;
   onClose: () => void;
   onStoreChanged: () => Promise<void>;
@@ -13,7 +12,6 @@ type Props = {
 
 export function SettingsPage({
   stores,
-  products,
   toolSettings,
   onClose,
   onStoreChanged,
@@ -48,7 +46,7 @@ export function SettingsPage({
           <div>
             <h1 style={{ margin: 0, color: "#12263f", fontSize: 28 }}>系统设置</h1>
             <p style={{ margin: "6px 0 0", color: "#666", fontSize: 14 }}>
-              管理扫描频率、跟卖规则、店铺绑定与商品成本价
+              管理跟卖规则、店铺绑定与各店铺的同步 / 扫描频率
             </p>
           </div>
           <button
@@ -70,7 +68,6 @@ export function SettingsPage({
 
         <SettingsPanel
           stores={stores}
-          products={products}
           toolSettings={toolSettings}
           onStoreChanged={onStoreChanged}
           onProductsChanged={onProductsChanged}

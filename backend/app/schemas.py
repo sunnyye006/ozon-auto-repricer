@@ -11,12 +11,27 @@ class StoreCreate(BaseModel):
     api_base_url: str | None = None
 
 
+class StoreUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    client_id: str | None = None
+    api_key: str | None = None
+    api_base_url: str | None = None
+    auto_reprice_enabled: bool | None = None
+    auto_sync_interval_minutes: int | None = Field(default=None, ge=5, le=1440)
+    scan_interval_minutes: int | None = Field(default=None, ge=1, le=1440)
+
+
 class StoreOut(BaseModel):
     id: int
     name: str
     client_id: str
     api_base_url: str
     is_active: bool
+    auto_reprice_enabled: bool
+    auto_sync_interval_minutes: int
+    scan_interval_minutes: int
+    last_synced_at: datetime | None = None
+    last_scanned_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -28,6 +43,8 @@ class ProductOut(BaseModel):
     ozon_product_id: str
     sku: str | None
     name: str
+    image_url: str | None = None
+    platform: str = "Ozon"
     current_price: Decimal
     cost_price: Decimal
     auto_reprice_enabled: bool
@@ -73,9 +90,15 @@ class RepricingRulesUpdate(BaseModel):
 
 class ScanIntervalSettingsOut(BaseModel):
     scan_interval_minutes: int
+    auto_sync_interval_minutes: int
     preset_options: list[int]
+    auto_sync_preset_options: list[int]
     repricing_rules: RepricingRulesOut
 
 
 class ScanIntervalSettingsUpdate(BaseModel):
     minutes: int = Field(gt=0, le=1440)
+
+
+class AutoSyncIntervalUpdate(BaseModel):
+    minutes: int = Field(ge=5, le=1440)

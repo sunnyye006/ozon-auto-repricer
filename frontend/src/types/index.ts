@@ -11,6 +11,19 @@ export type Store = {
   client_id: string;
   api_base_url: string;
   is_active: boolean;
+  auto_reprice_enabled: boolean;
+  auto_sync_interval_minutes: number;
+  scan_interval_minutes: number;
+  last_synced_at?: string | null;
+  last_scanned_at?: string | null;
+};
+
+export type SyncProgress = {
+  phase: "fetch" | "sync" | "done" | "error";
+  current?: number;
+  total?: number;
+  synced?: number;
+  message: string;
 };
 
 export type Product = {
@@ -19,6 +32,8 @@ export type Product = {
   ozon_product_id: string;
   sku?: string;
   name: string;
+  image_url?: string | null;
+  platform?: string;
   current_price: string;
   cost_price: string;
   auto_reprice_enabled: boolean;
@@ -37,7 +52,9 @@ export type PriceEvent = {
 
 export type ToolSettings = {
   scan_interval_minutes: number;
+  auto_sync_interval_minutes: number;
   preset_options: number[];
+  auto_sync_preset_options: number[];
   repricing_rules: {
     price_step: string;
     price_step_presets: string[];

@@ -4,9 +4,11 @@ import { api, createEventSource } from "./api/client";
 import { DataDimensions } from "./components/DataDimensions";
 import { EventAnalyticsPanel } from "./components/EventAnalyticsPanel";
 import { EventStream } from "./components/EventStream";
+import { ProductCostManager } from "./components/ProductCostManager";
 import { SettingsGearButton } from "./components/SettingsGearButton";
-import { ProductTable } from "./components/ProductTable";
 import { SettingsPage } from "./components/SettingsPage";
+import { SideNav } from "./components/SideNav";
+import type { NavKey } from "./components/SideNav";
 import { StatsCards } from "./components/StatsCards";
 import type { DashboardStats, PriceEvent, Product, Store, ToolSettings } from "./types";
 
@@ -18,15 +20,15 @@ const MOCK_STATS: DashboardStats = {
 };
 
 const MOCK_STORES: Store[] = [
-  { id: 1, name: "Ozon RU 主店", client_id: "oz-main-001", api_base_url: "https://api-seller.ozon.ru", is_active: true },
-  { id: 2, name: "Ozon RU 备店", client_id: "oz-backup-002", api_base_url: "https://api-seller.ozon.ru", is_active: true },
+  { id: 1, name: "Ozon RU 主店", client_id: "oz-main-001", api_base_url: "https://api-seller.ozon.ru", is_active: true, auto_reprice_enabled: true, auto_sync_interval_minutes: 60, scan_interval_minutes: 10 },
+  { id: 2, name: "Ozon RU 备店", client_id: "oz-backup-002", api_base_url: "https://api-seller.ozon.ru", is_active: true, auto_reprice_enabled: true, auto_sync_interval_minutes: 60, scan_interval_minutes: 10 },
 ];
 
 const MOCK_PRODUCTS: Product[] = [
-  { id: 1001, store_id: 1, ozon_product_id: "oz-1001", name: "蓝牙耳机 Pro", current_price: "1299.00", cost_price: "980.00", auto_reprice_enabled: true },
-  { id: 1002, store_id: 1, ozon_product_id: "oz-1002", name: "智能手环 S4", current_price: "899.00", cost_price: "620.00", auto_reprice_enabled: true },
-  { id: 1003, store_id: 2, ozon_product_id: "oz-1003", name: "车载充电器 65W", current_price: "459.00", cost_price: "300.00", auto_reprice_enabled: false },
-  { id: 1004, store_id: 2, ozon_product_id: "oz-1004", name: "Type-C 数据线 2m", current_price: "129.00", cost_price: "78.00", auto_reprice_enabled: true },
+  { id: 1001, store_id: 1, ozon_product_id: "oz-1001", name: "蓝牙耳机 Pro", current_price: "1299.00", cost_price: "980.00", auto_reprice_enabled: true, platform: "Ozon" },
+  { id: 1002, store_id: 1, ozon_product_id: "oz-1002", name: "智能手环 S4", current_price: "899.00", cost_price: "620.00", auto_reprice_enabled: true, platform: "Ozon" },
+  { id: 1003, store_id: 2, ozon_product_id: "oz-1003", name: "车载充电器 65W", current_price: "459.00", cost_price: "300.00", auto_reprice_enabled: false, platform: "Ozon" },
+  { id: 1004, store_id: 2, ozon_product_id: "oz-1004", name: "Type-C 数据线 2m", current_price: "129.00", cost_price: "78.00", auto_reprice_enabled: true, platform: "Ozon" },
 ];
 
 const MOCK_EVENTS: PriceEvent[] = [
@@ -38,12 +40,16 @@ const MOCK_EVENTS: PriceEvent[] = [
 
 const MOCK_SETTINGS: ToolSettings = {
   scan_interval_minutes: 10,
+  auto_sync_interval_minutes: 60,
   preset_options: [5, 10, 20],
+  auto_sync_preset_options: [30, 60, 120, 240],
   repricing_rules: {
     price_step: "0.1",
     price_step_presets: ["0.1", "1"],
   },
 };
+
+const SIDENAV_COLLAPSED_KEY = "ozon-sidenav-collapsed";
 
 export default function App() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -53,6 +59,14 @@ export default function App() {
   const [toolSettings, setToolSettings] = useState<ToolSettings | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [usingMockData, setUsingMockData] = useState(false);
+  const [activeNav, setActiveNav] = useState<NavKey>("dashboard");
+  const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SIDENAV_COLLAPSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => String(b.timestamp ?? b.created_at).localeCompare(String(a.timestamp ?? a.created_at))),
@@ -112,75 +126,108 @@ export default function App() {
     return () => source.close();
   }, []);
 
+  function toggleNavCollapsed() {
+    setNavCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDENAV_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        // ignore storage error
+      }
+      return next;
+    });
+  }
+
   return (
     <>
       {!settingsOpen && (
-        <main
+        <div
           style={{
-            maxWidth: 1360,
-            margin: "0 auto",
-            padding: 20,
-            display: "grid",
-            gap: 16,
-            background: "linear-gradient(180deg, #f0f8ff 0%, #f8fbff 35%, #f9f5ff 100%)",
+            display: "flex",
             minHeight: "100vh",
+            background: "linear-gradient(180deg, #f0f8ff 0%, #f8fbff 35%, #f9f5ff 100%)",
           }}
         >
-          <header
+          <SideNav
+            activeKey={activeNav}
+            collapsed={navCollapsed}
+            onSelect={setActiveNav}
+            onToggleCollapsed={toggleNavCollapsed}
+          />
+
+          <main
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
+              flex: 1,
+              maxWidth: 1360,
+              margin: "0 auto",
+              padding: 20,
+              display: "grid",
+              gap: 16,
+              minWidth: 0,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <h1 style={{ margin: 0, color: "#12263f" }}>Ozon 自动跟卖调价工具</h1>
-              {usingMockData && (
-                <span
+            <header
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <h1 style={{ margin: 0, color: "#12263f" }}>Ozon 自动跟卖调价工具</h1>
+                {usingMockData && (
+                  <span
+                    style={{
+                      border: "1px solid #ffd699",
+                      background: "#fff7e8",
+                      color: "#a15d00",
+                      borderRadius: 8,
+                      padding: "4px 10px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    演示数据模式
+                  </span>
+                )}
+              </div>
+              <SettingsGearButton onClick={() => setSettingsOpen(true)} />
+            </header>
+
+            {activeNav === "dashboard" && (
+              <>
+                <StatsCards stats={stats} />
+
+                <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
+                  <DataDimensions stats={stats} events={sortedEvents.slice(0, 100)} products={products} stores={stores} />
+                </section>
+
+                <section
                   style={{
-                    border: "1px solid #ffd699",
-                    background: "#fff7e8",
-                    color: "#a15d00",
-                    borderRadius: 8,
-                    padding: "4px 10px",
-                    fontSize: 12,
-                    fontWeight: 600,
+                    display: "grid",
+                    gridTemplateColumns: "minmax(420px, 620px) minmax(480px, 1fr)",
+                    gap: 16,
+                    alignItems: "start",
                   }}
                 >
-                  演示数据模式
-                </span>
-              )}
-            </div>
-            <SettingsGearButton onClick={() => setSettingsOpen(true)} />
-          </header>
-          <StatsCards stats={stats} />
+                  <EventStream events={sortedEvents.slice(0, 100)} />
+                  <EventAnalyticsPanel events={sortedEvents.slice(0, 100)} topRatio={stats?.top_price_capture_ratio ?? 0} />
+                </section>
+              </>
+            )}
 
-          <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
-            <DataDimensions stats={stats} events={sortedEvents.slice(0, 100)} products={products} stores={stores} />
-          </section>
-
-          <ProductTable products={products} stores={stores} />
-
-          <section
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(420px, 620px) minmax(480px, 1fr)",
-              gap: 16,
-              alignItems: "start",
-            }}
-          >
-            <EventStream events={sortedEvents.slice(0, 100)} />
-            <EventAnalyticsPanel events={sortedEvents.slice(0, 100)} topRatio={stats?.top_price_capture_ratio ?? 0} />
-          </section>
-        </main>
+            {activeNav === "cost-manager" && (
+              <ProductCostManager products={products} stores={stores} onProductsChanged={reloadProducts} />
+            )}
+          </main>
+        </div>
       )}
 
       {settingsOpen && (
         <SettingsPage
           stores={stores}
-          products={products}
           toolSettings={toolSettings}
           onClose={() => setSettingsOpen(false)}
           onStoreChanged={reloadAll}

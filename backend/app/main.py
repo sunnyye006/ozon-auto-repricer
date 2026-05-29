@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import dashboard, events, products, settings, stores
 from app.core.config import settings as app_settings
-from app.core.db import SessionLocal, engine
+from app.core.db import SessionLocal, run_migrations
 from app.models import Base
 from app.services.app_settings_service import get_scan_interval_minutes
 from app.services.scheduler_service import scheduler_service
@@ -13,12 +13,11 @@ from app.services.scheduler_service import scheduler_service
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await run_migrations()
 
     async with SessionLocal() as db:
-        interval_minutes = await get_scan_interval_minutes(db)
-    scheduler_service.start(interval_minutes)
+        _ = await get_scan_interval_minutes(db)
+    scheduler_service.start()
     yield
     scheduler_service.stop()
 

@@ -8,7 +8,10 @@ from app.core.config import settings
 from app.models import AppSetting
 
 SCAN_INTERVAL_KEY = "scan_interval_minutes"
+AUTO_SYNC_INTERVAL_KEY = "auto_sync_interval_minutes"
 REPRICING_RULES_KEY = "repricing_rules_json"
+
+DEFAULT_AUTO_SYNC_INTERVAL_MINUTES = 60
 
 PRICE_STEP_PRESETS = [Decimal("0.1"), Decimal("1.0")]
 
@@ -33,6 +36,27 @@ async def get_scan_interval_minutes(db: AsyncSession) -> int:
         return max(1, min(parsed, 1440))
     except ValueError:
         return settings.scan_interval_minutes
+
+
+async def get_auto_sync_interval_minutes(db: AsyncSession) -> int:
+    row = await db.get(AppSetting, AUTO_SYNC_INTERVAL_KEY)
+    if not row:
+        return DEFAULT_AUTO_SYNC_INTERVAL_MINUTES
+    try:
+        parsed = int(row.value)
+        return max(5, min(parsed, 1440))
+    except ValueError:
+        return DEFAULT_AUTO_SYNC_INTERVAL_MINUTES
+
+
+async def save_auto_sync_interval_minutes(db: AsyncSession, minutes: int) -> int:
+    value = max(5, min(int(minutes), 1440))
+    row = await db.get(AppSetting, AUTO_SYNC_INTERVAL_KEY)
+    if row:
+        row.value = str(value)
+    else:
+        db.add(AppSetting(key=AUTO_SYNC_INTERVAL_KEY, value=str(value)))
+    return value
 
 
 def repricing_rules_to_dict(rules: RepricingRules) -> dict[str, str]:

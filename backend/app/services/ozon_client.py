@@ -2,9 +2,24 @@ from __future__ import annotations
 
 import asyncio
 from decimal import Decimal
+from collections.abc import Callable
 from typing import Any
 
 import httpx
+
+ProgressCallback = Callable[[str, int, int, str], None]
+
+
+def _pick_positive_price(*candidates: Any) -> Any:
+    for raw in candidates:
+        if raw in (None, "", "0", 0):
+            continue
+        try:
+            if Decimal(str(raw)) > 0:
+                return raw
+        except Exception:  # noqa: BLE001
+            continue
+    return None
 
 
 class OzonApiError(Exception):
@@ -60,10 +75,15 @@ class OzonClient:
                 await asyncio.sleep(1.5 * (attempt + 1))
         raise OzonApiError(f"Ozon API request failed for {path}: {last_error}")
 
-    async def list_products(self) -> list[dict[str, Any]]:
+    async def list_products(self, on_progress: ProgressCallback | None = None) -> list[dict[str, Any]]:
+        def report(phase: str, current: int, total: int, message: str) -> None:
+            if on_progress:
+                on_progress(phase, current, total, message)
+
         product_ids: list[int] = []
         offer_by_product: dict[int, str] = {}
         last_id = ""
+        report("fetch", 0, 0, "正在拉取商品 ID 列表…")
 
         while True:
             data = await self._post(
@@ -93,50 +113,88 @@ class OzonClient:
             return []
 
         info_by_id: dict[int, dict[str, Any]] = {}
-        for i in range(0, len(product_ids), 1000):
+        info_chunks = (len(product_ids) + 999) // 1000
+        for chunk_index, i in enumerate(range(0, len(product_ids), 1000), start=1):
             chunk = product_ids[i : i + 1000]
+            report("fetch", chunk_index, info_chunks, f"拉取商品详情 {chunk_index}/{info_chunks}…")
             info_data = await self._post("/v3/product/info/list", {"product_id": chunk})
-            for item in info_data.get("result", {}).get("items", []):
+            info_items = info_data.get("items") or info_data.get("result", {}).get("items", [])
+            for item in info_items:
                 pid = item.get("id") or item.get("product_id")
                 if pid is not None:
                     info_by_id[int(pid)] = item
 
         price_by_id: dict[int, dict[str, Any]] = {}
-        cursor = ""
-        while True:
-            price_data = await self._post(
-                "/v5/product/info/prices",
-                {"filter": {"visibility": "ALL"}, "cursor": cursor, "limit": 1000},
-            )
-            price_items = price_data.get("result", {}).get("items", [])
-            if not price_items:
-                break
-            for item in price_items:
-                pid = item.get("product_id")
-                if pid is not None:
-                    price_by_id[int(pid)] = item
-            cursor = str(price_data.get("result", {}).get("cursor") or "")
-            if not cursor:
-                break
+        price_chunks = max(1, (len(product_ids) + 999) // 1000)
+        for chunk_index, i in enumerate(range(0, len(product_ids), 1000), start=1):
+            chunk = product_ids[i : i + 1000]
+            report("fetch", chunk_index, price_chunks, f"拉取价格 {chunk_index}/{price_chunks}…")
+            cursor = ""
+            while True:
+                price_data = await self._post(
+                    "/v5/product/info/prices",
+                    {
+                        "filter": {"product_id": [str(pid) for pid in chunk], "visibility": "ALL"},
+                        "cursor": cursor,
+                        "limit": 1000,
+                    },
+                )
+                price_items = price_data.get("result", {}).get("items", [])
+                if not price_items:
+                    break
+                for item in price_items:
+                    pid = item.get("product_id")
+                    if pid is not None:
+                        price_by_id[int(pid)] = item
+                cursor = str(price_data.get("result", {}).get("cursor") or "")
+                if not cursor:
+                    break
 
         merged: list[dict[str, Any]] = []
         for pid in product_ids:
             info = info_by_id.get(pid, {})
             price_info = price_by_id.get(pid, {})
-            price_block = price_info.get("price") or {}
-            price_value = (
-                price_block.get("marketing_seller_price")
-                or price_block.get("price")
-                or info.get("price")
-                or info.get("marketing_price")
+            price_block = price_info.get("price") if isinstance(price_info.get("price"), dict) else {}
+            price_value = _pick_positive_price(
+                price_block.get("price"),
+                price_block.get("marketing_price"),
+                price_block.get("old_price"),
+                price_block.get("min_price"),
+                price_block.get("retail_price"),
+                price_block.get("marketing_seller_price"),
+                info.get("price"),
+                info.get("marketing_price"),
+                info.get("old_price"),
+                info.get("min_price"),
             )
+            net_price_raw = _pick_positive_price(
+                price_block.get("net_price"),
+                price_info.get("net_price") if not isinstance(price_info.get("net_price"), dict) else None,
+            )
+            image_url = None
+            primary = info.get("primary_image")
+            if isinstance(primary, list):
+                image_url = next((str(u) for u in primary if u), None)
+            elif isinstance(primary, str):
+                image_url = primary
+            if not image_url:
+                images = info.get("images")
+                if isinstance(images, list) and images:
+                    first = images[0]
+                    image_url = first if isinstance(first, str) else (first.get("file_name") if isinstance(first, dict) else None)
+            if not image_url:
+                color_image = info.get("color_image")
+                if isinstance(color_image, str):
+                    image_url = color_image
+
             merged.append(
                 {
                     "product_id": pid,
                     "offer_id": offer_by_product.get(pid) or info.get("offer_id"),
                     "name": info.get("name") or f"Ozon Product {pid}",
+                    "image_url": image_url,
                     "price": price_value,
-                    "net_price": price_info.get("net_price") or price_block.get("net_price"),
+                    "net_price": net_price_raw,
                     "min_price": price_block.get("min_price"),
                 }
             )
