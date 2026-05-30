@@ -13,7 +13,7 @@ import type { NavKey } from "./components/SideNav";
 import { StatsCards } from "./components/StatsCards";
 import type { AuthUser, DashboardStats, PriceEvent, Product, Store, ToolSettings } from "./types";
 
-type SessionUser = { id: number; email: string; role: "admin" | "user" };
+type SessionUser = { id: number; email: string; username?: string | null; role: "admin" | "user" };
 
 const MOCK_STATS: DashboardStats = {
   total_products: 128,
@@ -128,7 +128,7 @@ export default function App() {
         } else {
           setNeedLogin(false);
           if (me.authenticated && me.id != null && me.email && me.role) {
-            setSessionUser({ id: me.id, email: me.email, role: me.role });
+            setSessionUser({ id: me.id, email: me.email, username: me.username, role: me.role });
           }
         }
       } catch {
@@ -181,6 +181,8 @@ export default function App() {
     setEvents([]);
     setToolSettings(null);
     setSessionUser(null);
+    setActiveNav("dashboard");
+    setSettingsOpen(false);
     setNeedLogin(true);
   }
 
@@ -206,7 +208,9 @@ export default function App() {
     return (
       <Login
         onAuthed={(u) => {
-          setSessionUser({ id: u.id, email: u.email, role: u.role });
+          setSessionUser({ id: u.id, email: u.email, username: u.username, role: u.role });
+          setActiveNav("dashboard");
+          setSettingsOpen(false);
           setNeedLogin(false);
         }}
       />
@@ -270,25 +274,9 @@ export default function App() {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {authEnabled && sessionUser && (
-                  <>
-                    <span style={{ color: "#5b6b85", fontSize: 13 }}>{sessionUser.email}</span>
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      style={{
-                        border: "1px solid #c5d7ff",
-                        borderRadius: 8,
-                        padding: "6px 12px",
-                        background: "#fff",
-                        color: "#2b5fcc",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                        fontSize: 13,
-                      }}
-                    >
-                      退出登录
-                    </button>
-                  </>
+                  <span style={{ color: "#5b6b85", fontSize: 13, fontWeight: 600 }}>
+                    {sessionUser.username || sessionUser.email}
+                  </span>
                 )}
                 <SettingsGearButton onClick={() => setSettingsOpen(true)} />
               </div>
@@ -333,6 +321,12 @@ export default function App() {
           stores={stores}
           toolSettings={toolSettings}
           isAdmin={authEnabled ? sessionUser?.role === "admin" : false}
+          currentUserId={sessionUser?.id ?? null}
+          showLogout={authEnabled && !!sessionUser}
+          onLogout={handleLogout}
+          onProfileUpdated={(u) =>
+            setSessionUser({ id: u.id, email: u.email, username: u.username, role: u.role })
+          }
           onClose={() => setSettingsOpen(false)}
           onStoreChanged={reloadAll}
           onProductsChanged={reloadProducts}

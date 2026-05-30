@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type CSSProperties, Fragment, useEffect, useState } from "react";
 
 import { api } from "../api/client";
 import type { AdminStore, AuthUser } from "../types";
@@ -12,12 +12,42 @@ const sectionStyle = {
 
 const UNASSIGNED = "__none__";
 
-export function AdminPanel() {
+const editInputStyle: CSSProperties = {
+  border: "1px solid #c5d7ff",
+  borderRadius: 8,
+  padding: "8px 11px",
+  fontSize: 13,
+  minWidth: 220,
+};
+
+function actionBtn(color: string): CSSProperties {
+  return {
+    border: `1px solid ${color}`,
+    borderRadius: 6,
+    padding: "3px 9px",
+    background: "#fff",
+    color,
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 600,
+  };
+}
+
+type Props = {
+  currentUserId?: number | null;
+  onSelfUpdated?: (user: AuthUser) => void;
+};
+
+export function AdminPanel({ currentUserId, onSelfUpdated }: Props) {
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [stores, setStores] = useState<AdminStore[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingStoreId, setSavingStoreId] = useState<number | null>(null);
+  const [busyUserId, setBusyUserId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPassword, setEditPassword] = useState("");
 
   async function reload() {
     setError(null);
@@ -35,6 +65,71 @@ export function AdminPanel() {
   useEffect(() => {
     void reload();
   }, []);
+
+  async function runUserAction(userId: number, fn: () => Promise<void>) {
+    setBusyUserId(userId);
+    try {
+      await fn();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "操作失败");
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  function startEdit(user: AuthUser) {
+    setEditingId(user.id);
+    setEditName(user.username ?? "");
+    setEditPassword("");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditName("");
+    setEditPassword("");
+  }
+
+  async function saveEdit(user: AuthUser) {
+    const name = editName.trim();
+    const wantName = !!name && name !== (user.username ?? "");
+    const wantPassword = !!editPassword;
+    if (!name) {
+      alert("用户名不能为空");
+      return;
+    }
+    if (wantPassword && editPassword.length < 6) {
+      alert("新密码至少 6 位");
+      return;
+    }
+    if (!wantName && !wantPassword) {
+      alert("没有需要保存的修改");
+      return;
+    }
+    await runUserAction(user.id, async () => {
+      let updated = user;
+      if (wantName) updated = await api.updateUserName(user.id, name);
+      if (wantPassword) updated = await api.resetUserPassword(user.id, editPassword);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
+      if (currentUserId != null && user.id === currentUserId) onSelfUpdated?.(updated);
+      cancelEdit();
+    });
+  }
+
+  async function toggleActive(user: AuthUser) {
+    await runUserAction(user.id, async () => {
+      const updated = await api.setUserActive(user.id, !user.is_active);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
+    });
+  }
+
+  async function removeUser(user: AuthUser) {
+    if (!window.confirm(`确定删除用户「${user.username || user.email}」？其名下店铺将变为未分配。`)) return;
+    await runUserAction(user.id, async () => {
+      await api.deleteUser(user.id);
+      setUsers((prev) => prev.filter((u) => u.id !== user.id));
+      await reload();
+    });
+  }
 
   async function changeOwner(store: AdminStore, value: string) {
     const userId = value === UNASSIGNED ? null : Number(value);
@@ -64,16 +159,24 @@ export function AdminPanel() {
               <thead>
                 <tr style={{ background: "#f1f6ff", color: "#1d4f91" }}>
                   <th align="left" style={{ padding: "8px" }}>ID</th>
+                  <th align="left" style={{ padding: "8px" }}>用户名</th>
                   <th align="left" style={{ padding: "8px" }}>邮箱</th>
                   <th align="left" style={{ padding: "8px" }}>角色</th>
                   <th align="left" style={{ padding: "8px" }}>状态</th>
+                  <th align="left" style={{ padding: "8px" }}>操作</th>
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} style={{ borderTop: "1px solid #eef3ff" }}>
+                {users.map((u) => {
+                  const isSelf = currentUserId != null && u.id === currentUserId;
+                  const busy = busyUserId === u.id;
+                  const editing = editingId === u.id;
+                  return (
+                  <Fragment key={u.id}>
+                  <tr style={{ borderTop: "1px solid #eef3ff" }}>
                     <td style={{ padding: "8px", color: "#415472" }}>{u.id}</td>
-                    <td style={{ padding: "8px", color: "#12263f", fontWeight: 600 }}>{u.email}</td>
+                    <td style={{ padding: "8px", color: "#12263f", fontWeight: 600 }}>{u.username || "—"}</td>
+                    <td style={{ padding: "8px", color: "#415472" }}>{u.email}</td>
                     <td style={{ padding: "8px" }}>
                       <span
                         style={{
@@ -89,10 +192,81 @@ export function AdminPanel() {
                       </span>
                     </td>
                     <td style={{ padding: "8px", color: u.is_active ? "#1a7f37" : "#999" }}>
-                      {u.is_active ? "启用" : "禁用"}
+                      {u.is_active ? "启用" : "已暂停"}
+                    </td>
+                    <td style={{ padding: "8px" }}>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        <button type="button" disabled={busy} onClick={() => (editing ? cancelEdit() : startEdit(u))} style={actionBtn("#1d4f91")}>
+                          {editing ? "收起" : "编辑"}
+                        </button>
+                        {isSelf ? (
+                          <span style={{ color: "#aaa", fontSize: 12 }}>当前账号</span>
+                        ) : (
+                          <>
+                            <button type="button" disabled={busy} onClick={() => void toggleActive(u)} style={actionBtn(u.is_active ? "#a15d00" : "#1a7f37")}>
+                              {u.is_active ? "暂停" : "启用"}
+                            </button>
+                            <button type="button" disabled={busy} onClick={() => void removeUser(u)} style={actionBtn("#d6336c")}>
+                              删除
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                ))}
+                  {editing && (
+                    <tr style={{ background: "#f7faff" }}>
+                      <td colSpan={6} style={{ padding: "12px 16px" }}>
+                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                          <label style={{ display: "grid", gap: 4, fontSize: 12, color: "#33456a" }}>
+                            用户名
+                            <input
+                              type="text"
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              placeholder="用户名"
+                              style={editInputStyle}
+                            />
+                          </label>
+                          <label style={{ display: "grid", gap: 4, fontSize: 12, color: "#33456a" }}>
+                            新密码（留空则不修改）
+                            <input
+                              type="password"
+                              value={editPassword}
+                              onChange={(e) => setEditPassword(e.target.value)}
+                              autoComplete="new-password"
+                              placeholder="至少 6 位"
+                              style={editInputStyle}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void saveEdit(u)}
+                            style={{
+                              border: "none",
+                              borderRadius: 8,
+                              padding: "9px 18px",
+                              color: "#fff",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              background: "linear-gradient(135deg, #4f8cff, #6d5efc)",
+                              cursor: busy ? "not-allowed" : "pointer",
+                              opacity: busy ? 0.7 : 1,
+                            }}
+                          >
+                            {busy ? "保存中…" : "保存"}
+                          </button>
+                          <button type="button" onClick={cancelEdit} style={actionBtn("#788196")}>
+                            取消
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

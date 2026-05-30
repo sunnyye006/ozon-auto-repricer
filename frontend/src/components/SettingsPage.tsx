@@ -1,4 +1,4 @@
-import type { Store, ToolSettings } from "../types";
+import type { AuthUser, Store, ToolSettings } from "../types";
 import { AdminPanel } from "./AdminPanel";
 import { SettingsPanel } from "./SettingsPanel";
 
@@ -6,6 +6,10 @@ type Props = {
   stores: Store[];
   toolSettings: ToolSettings | null;
   isAdmin?: boolean;
+  currentUserId?: number | null;
+  showLogout?: boolean;
+  onLogout?: () => void;
+  onProfileUpdated?: (user: AuthUser) => void;
   onClose: () => void;
   onStoreChanged: () => Promise<void>;
   onProductsChanged: () => Promise<void>;
@@ -16,6 +20,10 @@ export function SettingsPage({
   stores,
   toolSettings,
   isAdmin,
+  currentUserId,
+  showLogout,
+  onLogout,
+  onProfileUpdated,
   onClose,
   onStoreChanged,
   onProductsChanged,
@@ -52,24 +60,43 @@ export function SettingsPage({
               管理跟卖规则、店铺绑定与各店铺的同步 / 扫描频率
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              border: "1px solid #c5d7ff",
-              borderRadius: 8,
-              padding: "8px 16px",
-              background: "#fff",
-              color: "#2b5fcc",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            返回仪表盘
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {showLogout && onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                style={{
+                  border: "1px solid #ffc9c9",
+                  borderRadius: 8,
+                  padding: "8px 16px",
+                  background: "#fff5f5",
+                  color: "#d6336c",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                退出登录
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                border: "1px solid #c5d7ff",
+                borderRadius: 8,
+                padding: "8px 16px",
+                background: "#fff",
+                color: "#2b5fcc",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              返回仪表盘
+            </button>
+          </div>
         </header>
 
-        {isAdmin && <AdminPanel />}
+        {isAdmin && <AdminPanel currentUserId={currentUserId ?? null} onSelfUpdated={onProfileUpdated} />}
 
         <SettingsPanel
           stores={stores}

@@ -58,15 +58,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error(text || `请求失败 (${res.status})`);
   }
+  if (res.status === 204) {
+    return undefined as T;
+  }
   return res.json() as Promise<T>;
 }
 
 export const api = {
-  register: (email: string, password: string) =>
+  register: (email: string, username: string, password: string) =>
     request<TokenResponse>("/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, username, password }),
     }),
   login: (email: string, password: string) =>
     request<TokenResponse>("/auth/login", {
@@ -75,7 +78,33 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => request<AuthMe>("/auth/me"),
+  updateProfile: (payload: { username?: string; password?: string }) =>
+    request<AuthUser>("/auth/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
   getAdminUsers: () => request<AuthUser[]>("/admin/users"),
+  updateUserName: (userId: number, username: string) =>
+    request<AuthUser>(`/admin/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    }),
+  setUserActive: (userId: number, isActive: boolean) =>
+    request<AuthUser>(`/admin/users/${userId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: isActive }),
+    }),
+  resetUserPassword: (userId: number, password: string) =>
+    request<AuthUser>(`/admin/users/${userId}/password`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    }),
+  deleteUser: (userId: number) =>
+    request<void>(`/admin/users/${userId}`, { method: "DELETE" }),
   getAdminStores: () => request<AdminStore[]>("/admin/stores"),
   assignStore: (storeId: number, userId: number | null) =>
     request<AdminStore>(`/admin/stores/${storeId}/assign`, {

@@ -44,6 +44,10 @@ PRODUCT_ADDITIONS = {
     "platform": ("VARCHAR(20) NOT NULL DEFAULT 'Ozon'", "VARCHAR(20) NOT NULL DEFAULT 'Ozon'"),
 }
 
+USER_ADDITIONS = {
+    "username": ("VARCHAR(80)", "VARCHAR(80)"),
+}
+
 
 async def run_migrations() -> None:
     async with engine.begin() as conn:
@@ -81,6 +85,7 @@ async def run_migrations() -> None:
 
         await add_columns("stores", STORE_ADDITIONS)
         await add_columns("products", PRODUCT_ADDITIONS)
+        await add_columns("users", USER_ADDITIONS)
 
         # price_events 随时间无限增长，给时间列加索引以支撑清理与按时间查询
         await conn.execute(

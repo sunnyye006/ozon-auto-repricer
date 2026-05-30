@@ -2,15 +2,28 @@ import { useState } from "react";
 
 import { api, setToken } from "../api/client";
 import type { AuthUser } from "../types";
+import loginBg from "../assets/login-bg.png";
 
 type Props = {
   onAuthed: (user: AuthUser) => void;
 };
 
+function EyeIcon({ off }: { off: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
+      {off && <line x1="3" y1="3" x2="21" y2="21" />}
+    </svg>
+  );
+}
+
 export function Login({ onAuthed }: Props) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,13 +33,20 @@ export function Login({ onAuthed }: Props) {
       setError("请输入邮箱和密码");
       return;
     }
+    if (mode === "register" && !username.trim()) {
+      setError("请输入用户名");
+      return;
+    }
     if (mode === "register" && password.length < 6) {
       setError("密码至少 6 位");
       return;
     }
     setSubmitting(true);
     try {
-      const res = mode === "login" ? await api.login(email.trim(), password) : await api.register(email.trim(), password);
+      const res =
+        mode === "login"
+          ? await api.login(email.trim(), password)
+          : await api.register(email.trim(), username.trim(), password);
       setToken(res.access_token);
       onAuthed(res.user);
     } catch (err) {
@@ -39,32 +59,35 @@ export function Login({ onAuthed }: Props) {
   return (
     <div
       style={{
+        position: "relative",
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "linear-gradient(135deg, #eef6ff 0%, #f4f9ff 45%, #f6f3ff 100%)",
         padding: 20,
+        background: `#eef3fb url(${loginBg}) center / cover no-repeat`,
       }}
     >
       <div
         style={{
           width: "100%",
           maxWidth: 380,
-          background: "#fff",
+          background: "rgba(255, 255, 255, 0.6)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
           borderRadius: 16,
-          border: "1px solid #e2ebff",
-          boxShadow: "0 18px 48px rgba(40, 85, 170, 0.12)",
+          border: "1px solid rgba(255, 255, 255, 0.8)",
+          boxShadow: "0 20px 52px rgba(60, 100, 190, 0.18)",
           padding: 28,
         }}
       >
         <h1 style={{ margin: "0 0 4px", color: "#12263f", fontSize: 22 }}>Ozon 自动跟卖调价</h1>
-        <p style={{ margin: "0 0 20px", color: "#6a7695", fontSize: 13 }}>
+        <p style={{ margin: "0 0 20px", color: "#41527a", fontSize: 13 }}>
           {mode === "login" ? "登录你的账号" : "注册新账号"}
         </p>
 
         <div style={{ display: "grid", gap: 12 }}>
-          <label style={{ display: "grid", gap: 6, fontSize: 13, color: "#415472" }}>
+          <label style={{ display: "grid", gap: 6, fontSize: 13, color: "#33456a" }}>
             邮箱
             <input
               type="email"
@@ -72,22 +95,59 @@ export function Login({ onAuthed }: Props) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              style={{ border: "1px solid #c5d7ff", borderRadius: 8, padding: "10px 12px", fontSize: 14 }}
+              style={inputStyle}
             />
           </label>
-          <label style={{ display: "grid", gap: 6, fontSize: 13, color: "#415472" }}>
+
+          {mode === "register" && (
+            <label style={{ display: "grid", gap: 6, fontSize: 13, color: "#33456a" }}>
+              用户名
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="显示在右上角的名字"
+                style={inputStyle}
+              />
+            </label>
+          )}
+
+          <label style={{ display: "grid", gap: 6, fontSize: 13, color: "#33456a" }}>
             密码
-            <input
-              type="password"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void submit();
-              }}
-              placeholder={mode === "register" ? "至少 6 位" : "请输入密码"}
-              style={{ border: "1px solid #c5d7ff", borderRadius: 8, padding: "10px 12px", fontSize: 14 }}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void submit();
+                }}
+                placeholder={mode === "register" ? "至少 6 位" : "请输入密码"}
+                style={{ ...inputStyle, width: "100%", boxSizing: "border-box", paddingRight: 40 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                title={showPassword ? "隐藏密码" : "显示密码"}
+                style={{
+                  position: "absolute",
+                  right: 8,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  border: "none",
+                  background: "transparent",
+                  padding: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  cursor: "pointer",
+                  color: "#6a7695",
+                }}
+              >
+                <EyeIcon off={showPassword} />
+              </button>
+            </div>
           </label>
 
           {error && <div style={{ color: "#cb1b45", fontSize: 13 }}>{error}</div>}
@@ -126,3 +186,12 @@ export function Login({ onAuthed }: Props) {
     </div>
   );
 }
+
+const inputStyle = {
+  border: "1px solid #c5d7ff",
+  borderRadius: 8,
+  padding: "10px 12px",
+  fontSize: 14,
+  background: "rgba(255, 255, 255, 0.9)",
+  color: "#12263f",
+} as const;

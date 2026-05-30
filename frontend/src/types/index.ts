@@ -53,6 +53,7 @@ export type PriceEvent = {
 export type AuthUser = {
   id: number;
   email: string;
+  username?: string | null;
   role: "admin" | "user";
   is_active: boolean;
   created_at: string;
@@ -63,6 +64,7 @@ export type AuthMe = {
   auth_enabled: boolean;
   id?: number | null;
   email?: string | null;
+  username?: string | null;
   role?: "admin" | "user" | null;
 };
 

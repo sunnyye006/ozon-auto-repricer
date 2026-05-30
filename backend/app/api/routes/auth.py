@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import ROLE_ADMIN, ROLE_USER
+from app.core.auth import ROLE_ADMIN, ROLE_USER, CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import (
@@ -12,7 +12,14 @@ from app.core.security import (
     verify_password,
 )
 from app.models import User
-from app.schemas import AuthMeOut, LoginIn, RegisterIn, TokenOut, UserOut
+from app.schemas import (
+    AuthMeOut,
+    LoginIn,
+    ProfileUpdateIn,
+    RegisterIn,
+    TokenOut,
+    UserOut,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -35,6 +42,7 @@ async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)) -> T
 
     user = User(
         email=email,
+        username=payload.username.strip(),
         password_hash=hash_password(payload.password),
         role=_role_for(email),
         is_active=True,
@@ -67,6 +75,26 @@ async def login(payload: LoginIn, db: AsyncSession = Depends(get_db)) -> TokenOu
     return TokenOut(access_token=token, user=UserOut.model_validate(user))
 
 
+@router.patch("/profile", response_model=UserOut)
+async def update_profile(
+    payload: ProfileUpdateIn,
+    db: AsyncSession = Depends(get_db),
+    current: CurrentUser = Depends(get_current_user),
+) -> User:
+    if current.id is None:
+        raise HTTPException(status_code=400, detail="当前为免登录模式，无个人资料可修改")
+    user = await db.get(User, current.id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if payload.username is not None:
+        user.username = payload.username.strip()
+    if payload.password is not None:
+        user.password_hash = hash_password(payload.password)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 @router.get("/me", response_model=AuthMeOut)
 async def me(request: Request, db: AsyncSession = Depends(get_db)) -> AuthMeOut:
     if not settings.auth_enabled:
@@ -88,5 +116,6 @@ async def me(request: Request, db: AsyncSession = Depends(get_db)) -> AuthMeOut:
         auth_enabled=True,
         id=user.id,
         email=user.email,
+        username=user.username,
         role=user.role,
     )

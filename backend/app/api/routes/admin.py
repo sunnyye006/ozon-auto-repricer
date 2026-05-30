@@ -1,11 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import CurrentUser, require_admin
 from app.core.db import get_db
+from app.core.security import hash_password
 from app.models import Store, User
-from app.schemas import AdminStoreOut, AssignStoreIn, UserOut
+from app.schemas import (
+    AdminStoreOut,
+    AdminUserUpdateIn,
+    AssignStoreIn,
+    ResetPasswordIn,
+    UserOut,
+    UserStatusIn,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -17,6 +25,73 @@ async def list_users(
 ) -> list[User]:
     rows = await db.scalars(select(User).order_by(User.id.asc()))
     return rows.all()
+
+
+@router.patch("/users/{user_id}", response_model=UserOut)
+async def update_user(
+    user_id: int,
+    payload: AdminUserUpdateIn,
+    db: AsyncSession = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+) -> User:
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    user.username = payload.username.strip()
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.patch("/users/{user_id}/status", response_model=UserOut)
+async def set_user_status(
+    user_id: int,
+    payload: UserStatusIn,
+    db: AsyncSession = Depends(get_db),
+    admin: CurrentUser = Depends(require_admin),
+) -> User:
+    if admin.id is not None and admin.id == user_id:
+        raise HTTPException(status_code=400, detail="不能停用 / 启用自己的账号")
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    user.is_active = payload.is_active
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.patch("/users/{user_id}/password", response_model=UserOut)
+async def reset_user_password(
+    user_id: int,
+    payload: ResetPasswordIn,
+    db: AsyncSession = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+) -> User:
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    user.password_hash = hash_password(payload.password)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.delete("/users/{user_id}", status_code=204)
+async def delete_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: CurrentUser = Depends(require_admin),
+) -> None:
+    if admin.id is not None and admin.id == user_id:
+        raise HTTPException(status_code=400, detail="不能删除自己的账号")
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    # 先把该用户名下的店铺解除归属，避免依赖数据库外键级联（跨方言更稳妥）
+    await db.execute(update(Store).where(Store.owner_id == user_id).values(owner_id=None))
+    await db.delete(user)
+    await db.commit()
 
 
 @router.get("/stores", response_model=list[AdminStoreOut])

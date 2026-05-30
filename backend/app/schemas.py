@@ -111,6 +111,7 @@ _EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 class RegisterIn(BaseModel):
     email: str = Field(pattern=_EMAIL_PATTERN, max_length=255)
+    username: str = Field(min_length=1, max_length=80)
     password: str = Field(min_length=6, max_length=128)
 
 
@@ -122,6 +123,7 @@ class LoginIn(BaseModel):
 class UserOut(BaseModel):
     id: int
     email: str
+    username: str | None = None
     role: str
     is_active: bool
     created_at: datetime
@@ -135,7 +137,25 @@ class AuthMeOut(BaseModel):
     auth_enabled: bool
     id: int | None = None
     email: str | None = None
+    username: str | None = None
     role: str | None = None
+
+
+class UserStatusIn(BaseModel):
+    is_active: bool
+
+
+class ResetPasswordIn(BaseModel):
+    password: str = Field(min_length=6, max_length=128)
+
+
+class ProfileUpdateIn(BaseModel):
+    username: str | None = Field(default=None, min_length=1, max_length=80)
+    password: str | None = Field(default=None, min_length=6, max_length=128)
+
+
+class AdminUserUpdateIn(BaseModel):
+    username: str = Field(min_length=1, max_length=80)
 
 
 class TokenOut(BaseModel):
