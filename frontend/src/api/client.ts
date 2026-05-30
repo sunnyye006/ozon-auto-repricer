@@ -1,9 +1,46 @@
-import type { DashboardStats, PriceEvent, Product, Store, SyncProgress, ToolSettings } from "../types";
+import type {
+  AdminStore,
+  AuthMe,
+  AuthUser,
+  DashboardStats,
+  PriceEvent,
+  Product,
+  Store,
+  SyncProgress,
+  TokenResponse,
+  ToolSettings,
+} from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000/api";
+const TOKEN_KEY = "ozon-auth-token";
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // ignore storage error
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, init);
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: { ...(init?.headers ?? {}), ...authHeaders() },
+  });
   if (!res.ok) {
     const text = await res.text();
     try {
@@ -25,6 +62,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  register: (email: string, password: string) =>
+    request<TokenResponse>("/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    }),
+  login: (email: string, password: string) =>
+    request<TokenResponse>("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    }),
+  me: () => request<AuthMe>("/auth/me"),
+  getAdminUsers: () => request<AuthUser[]>("/admin/users"),
+  getAdminStores: () => request<AdminStore[]>("/admin/stores"),
+  assignStore: (storeId: number, userId: number | null) =>
+    request<AdminStore>(`/admin/stores/${storeId}/assign`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId }),
+    }),
   getStats: () => request<DashboardStats>("/dashboard/stats"),
   getStores: () => request<Store[]>("/stores"),
   createStore: (payload: { name: string; client_id: string; api_key: string; api_base_url?: string }) =>
@@ -90,7 +148,10 @@ async function syncStoreProductsStream(
   storeId: number,
   onProgress?: (progress: SyncProgress) => void
 ): Promise<{ store_id: number; synced: number }> {
-  const res = await fetch(`${API_BASE}/stores/${storeId}/sync-products`, { method: "POST" });
+  const res = await fetch(`${API_BASE}/stores/${storeId}/sync-products`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `同步失败 (${res.status})`);
@@ -130,5 +191,7 @@ async function syncStoreProductsStream(
 
 export function createEventSource() {
   const streamBase = API_BASE.replace(/\/api$/, "");
-  return new EventSource(`${streamBase}/api/events/stream`);
+  const token = getToken();
+  const query = token ? `?token=${encodeURIComponent(token)}` : "";
+  return new EventSource(`${streamBase}/api/events/stream${query}`);
 }

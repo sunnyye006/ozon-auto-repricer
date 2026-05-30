@@ -6,6 +6,10 @@ type Props = {
   events: PriceEvent[];
 };
 
+const VISIBLE_ROWS = 10;
+const ROW_HEIGHT = 54;
+const ROW_GAP = 6;
+
 export function EventStream({ events }: Props) {
   const [filter, setFilter] = useState<"all" | "down" | "up">("all");
   const [now, setNow] = useState(Date.now());
@@ -165,19 +169,37 @@ export function EventStream({ events }: Props) {
         ))}
       </div>
 
-      <div style={{ maxHeight: 456, overflow: "auto", paddingRight: 2 }}>
-        {filteredEvents.map((event, idx) => (
+      <style>{`@keyframes ozonSlideIn{0%{opacity:0;transform:translateY(-115%);}60%{opacity:1;}100%{opacity:1;transform:translateY(0);}}`}</style>
+      <div
+        style={{
+          height: VISIBLE_ROWS * ROW_HEIGHT,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          gap: ROW_GAP,
+          borderRadius: 12,
+          border: "1px solid #eef3ff",
+          background: "#fbfdff",
+          padding: 6,
+          boxSizing: "border-box",
+        }}
+      >
+        {filteredEvents.slice(0, VISIBLE_ROWS).map((event, idx) => (
           <div
-            key={`${event.product_name}-${idx}`}
+            key={`${event.timestamp ?? event.created_at ?? ""}-${event.product_name}-${event.old_price ?? ""}-${event.new_price ?? ""}`}
             style={{
-              padding: "9px 8px",
-              borderBottom: "1px solid #eef4ff",
+              height: ROW_HEIGHT - ROW_GAP,
+              minHeight: ROW_HEIGHT - ROW_GAP,
+              padding: "0 10px",
               borderRadius: 10,
-              background: idx % 2 === 0 ? "rgba(79, 140, 255, 0.06)" : "rgba(255, 255, 255, 0.72)",
+              background: idx % 2 === 0 ? "rgba(79, 140, 255, 0.07)" : "rgba(255, 255, 255, 0.9)",
+              border: "1px solid #eef4ff",
               display: "grid",
               gridTemplateColumns: "36px minmax(0, 1fr) auto",
               gap: 8,
               alignItems: "center",
+              animation: "ozonSlideIn 0.38s ease",
+              boxSizing: "border-box",
             }}
           >
             <div
@@ -239,7 +261,9 @@ export function EventStream({ events }: Props) {
           </div>
         ))}
         {filteredEvents.length === 0 && (
-          <div style={{ padding: "26px 10px", textAlign: "center", color: "#7a86a5", fontSize: 13 }}>当前筛选条件下暂无事件</div>
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", color: "#7a86a5", fontSize: 13 }}>
+            当前筛选条件下暂无事件，开启自动调价后将实时滑入
+          </div>
         )}
       </div>
     </div>

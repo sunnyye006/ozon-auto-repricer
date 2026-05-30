@@ -57,6 +57,7 @@ export function ProductCostManager({ products, stores, onProductsChanged }: Prop
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draftCost, setDraftCost] = useState<string>("");
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [savedId, setSavedId] = useState<number | null>(null);
   const [autoOverride, setAutoOverride] = useState<Record<number, boolean>>({});
   const [pageSize, setPageSize] = useState<number>(10);
   const [page, setPage] = useState<number>(1);
@@ -112,8 +113,10 @@ export function ProductCostManager({ products, stores, onProductsChanged }: Prop
     setSavingId(product.id);
     try {
       await api.updateProductCosts([{ product_id: product.id, cost_price: cost }]);
-      await onProductsChanged();
       cancelEdit();
+      setSavedId(product.id);
+      window.setTimeout(() => setSavedId((cur) => (cur === product.id ? null : cur)), 1800);
+      void onProductsChanged();
     } catch (err) {
       alert(err instanceof Error ? err.message : "保存成本价失败");
     } finally {
@@ -285,9 +288,9 @@ export function ProductCostManager({ products, stores, onProductsChanged }: Prop
                               type="button"
                               disabled={savingId === product.id}
                               onClick={() => saveCost(product)}
-                              style={{ border: "1px solid #4f8cff", borderRadius: 6, padding: "4px 10px", color: "#fff", background: "linear-gradient(135deg, #4f8cff, #6d5efc)", cursor: "pointer" }}
+                              style={{ border: "1px solid #4f8cff", borderRadius: 6, padding: "4px 12px", color: "#fff", background: "linear-gradient(135deg, #4f8cff, #6d5efc)", cursor: savingId === product.id ? "not-allowed" : "pointer", opacity: savingId === product.id ? 0.75 : 1, minWidth: 64 }}
                             >
-                              保存
+                              {savingId === product.id ? "保存中…" : "保存"}
                             </button>
                             <button
                               type="button"
@@ -298,13 +301,18 @@ export function ProductCostManager({ products, stores, onProductsChanged }: Prop
                             </button>
                           </div>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => startEdit(product)}
-                            style={{ border: "1px solid #c5d7ff", borderRadius: 6, padding: "4px 12px", background: "#fff", color: "#2b5fcc", cursor: "pointer" }}
-                          >
-                            编辑
-                          </button>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(product)}
+                              style={{ border: "1px solid #c5d7ff", borderRadius: 6, padding: "4px 12px", background: "#fff", color: "#2b5fcc", cursor: "pointer" }}
+                            >
+                              编辑
+                            </button>
+                            {savedId === product.id && (
+                              <span style={{ color: "#12a85f", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}>已保存 ✓</span>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>

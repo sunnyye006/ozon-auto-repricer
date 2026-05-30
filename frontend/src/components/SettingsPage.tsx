@@ -1,9 +1,11 @@
 import type { Store, ToolSettings } from "../types";
+import { AdminPanel } from "./AdminPanel";
 import { SettingsPanel } from "./SettingsPanel";
 
 type Props = {
   stores: Store[];
   toolSettings: ToolSettings | null;
+  isAdmin?: boolean;
   onClose: () => void;
   onStoreChanged: () => Promise<void>;
   onProductsChanged: () => Promise<void>;
@@ -13,6 +15,7 @@ type Props = {
 export function SettingsPage({
   stores,
   toolSettings,
+  isAdmin,
   onClose,
   onStoreChanged,
   onProductsChanged,
@@ -65,6 +68,8 @@ export function SettingsPage({
             返回仪表盘
           </button>
         </header>
+
+        {isAdmin && <AdminPanel />}
 
         <SettingsPanel
           stores={stores}

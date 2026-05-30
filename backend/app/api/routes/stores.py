@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import CurrentUser, ensure_store_access, get_current_user
 from app.core.config import settings
 from app.core.db import SessionLocal, get_db
 from app.core.security import encrypt_secret
@@ -14,13 +15,23 @@ router = APIRouter(prefix="/stores", tags=["stores"])
 
 
 @router.get("", response_model=list[StoreOut])
-async def list_stores(db: AsyncSession = Depends(get_db)) -> list[Store]:
-    stores = await db.scalars(select(Store).order_by(Store.id.desc()))
+async def list_stores(
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> list[Store]:
+    stmt = select(Store).order_by(Store.id.desc())
+    if not user.is_admin:
+        stmt = stmt.where(Store.owner_id == user.id)
+    stores = await db.scalars(stmt)
     return stores.all()
 
 
 @router.post("", response_model=StoreOut)
-async def create_store(payload: StoreCreate, db: AsyncSession = Depends(get_db)) -> Store:
+async def create_store(
+    payload: StoreCreate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> Store:
     existed = await db.scalar(select(Store).where(Store.name == payload.name))
     if existed:
         raise HTTPException(status_code=409, detail="Store name already exists.")
@@ -32,6 +43,7 @@ async def create_store(payload: StoreCreate, db: AsyncSession = Depends(get_db))
         api_base_url=payload.api_base_url or settings.ozon_api_base_url,
         is_active=True,
         auto_reprice_enabled=True,
+        owner_id=user.id,
     )
     db.add(store)
     await db.commit()
@@ -40,10 +52,16 @@ async def create_store(payload: StoreCreate, db: AsyncSession = Depends(get_db))
 
 
 @router.patch("/{store_id}", response_model=StoreOut)
-async def update_store(store_id: int, payload: StoreUpdate, db: AsyncSession = Depends(get_db)) -> Store:
+async def update_store(
+    store_id: int,
+    payload: StoreUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> Store:
     store = await db.get(Store, store_id)
     if not store:
         raise HTTPException(status_code=404, detail="Store not found.")
+    await ensure_store_access(db, user, store)
 
     if payload.name is not None and payload.name != store.name:
         existed = await db.scalar(select(Store).where(Store.name == payload.name, Store.id != store_id))
@@ -73,10 +91,19 @@ async def update_store(store_id: int, payload: StoreUpdate, db: AsyncSession = D
 
 
 @router.post("/{store_id}/sync-products")
-async def sync_store_products(store_id: int) -> StreamingResponse:
+async def sync_store_products(
+    store_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> StreamingResponse:
+    store = await db.get(Store, store_id)
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found.")
+    await ensure_store_access(db, user, store)
+
     async def event_generator():
-        async with SessionLocal() as db:
-            async for event in sync_store_products_stream(db, store_id):
+        async with SessionLocal() as session:
+            async for event in sync_store_products_stream(session, store_id):
                 yield event
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

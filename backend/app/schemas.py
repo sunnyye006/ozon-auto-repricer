@@ -30,6 +30,7 @@ class StoreOut(BaseModel):
     auto_reprice_enabled: bool
     auto_sync_interval_minutes: int
     scan_interval_minutes: int
+    owner_id: int | None = None
     last_synced_at: datetime | None = None
     last_scanned_at: datetime | None = None
 
@@ -102,3 +103,55 @@ class ScanIntervalSettingsUpdate(BaseModel):
 
 class AutoSyncIntervalUpdate(BaseModel):
     minutes: int = Field(ge=5, le=1440)
+
+
+# ---- 鉴权 / 用户 ----
+_EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+
+class RegisterIn(BaseModel):
+    email: str = Field(pattern=_EMAIL_PATTERN, max_length=255)
+    password: str = Field(min_length=6, max_length=128)
+
+
+class LoginIn(BaseModel):
+    email: str = Field(pattern=_EMAIL_PATTERN, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class UserOut(BaseModel):
+    id: int
+    email: str
+    role: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuthMeOut(BaseModel):
+    authenticated: bool
+    auth_enabled: bool
+    id: int | None = None
+    email: str | None = None
+    role: str | None = None
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class AdminStoreOut(BaseModel):
+    id: int
+    name: str
+    owner_id: int | None = None
+    owner_email: str | None = None
+    is_active: bool
+    auto_reprice_enabled: bool
+
+
+class AssignStoreIn(BaseModel):
+    user_id: int | None = None

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import dashboard, events, products, settings, stores
+from app.api.routes import admin, auth, dashboard, events, products, settings, stores
 from app.core.config import settings as app_settings
 from app.core.db import SessionLocal, run_migrations
 from app.models import Base
@@ -32,6 +32,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 app.include_router(stores.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")

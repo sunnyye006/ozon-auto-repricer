@@ -50,6 +50,37 @@ export type PriceEvent = {
   new_price?: string;
 };
 
+export type AuthUser = {
+  id: number;
+  email: string;
+  role: "admin" | "user";
+  is_active: boolean;
+  created_at: string;
+};
+
+export type AuthMe = {
+  authenticated: boolean;
+  auth_enabled: boolean;
+  id?: number | null;
+  email?: string | null;
+  role?: "admin" | "user" | null;
+};
+
+export type TokenResponse = {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+};
+
+export type AdminStore = {
+  id: number;
+  name: string;
+  owner_id: number | null;
+  owner_email: string | null;
+  is_active: boolean;
+  auto_reprice_enabled: boolean;
+};
+
 export type ToolSettings = {
   scan_interval_minutes: number;
   auto_sync_interval_minutes: number;

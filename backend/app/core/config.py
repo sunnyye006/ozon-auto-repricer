@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     scan_interval_minutes: int = 10
     price_step: float = 0.1
 
+    # 鉴权 / 多租户。默认关闭，开启前线上行为与单租户完全一致，避免把自己锁在门外。
+    auth_enabled: bool = False
+    # 该邮箱注册后自动成为超级管理员（可查看所有店铺并分配给其他用户）。
+    super_admin_email: str = ""
+    jwt_expire_minutes: int = 60 * 24 * 7
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

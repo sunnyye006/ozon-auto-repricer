@@ -1,16 +1,23 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 export type NavKey = "dashboard" | "cost-manager";
 
 type Item = {
   key: NavKey;
   label: string;
-  icon: string;
+  icon: ReactNode;
   hint: string;
 };
 
+const HomeIcon = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 10.6 12 3l9 7.6" />
+    <path d="M5.4 9.2V19a1.6 1.6 0 0 0 1.6 1.6h3.1v-5.2h3.8v5.2H17A1.6 1.6 0 0 0 18.6 19V9.2" />
+  </svg>
+);
+
 const ITEMS: Item[] = [
-  { key: "dashboard", label: "首页", icon: "▦", hint: "实时数据 / 事件流" },
+  { key: "dashboard", label: "首页", icon: HomeIcon, hint: "实时数据 / 事件流" },
   { key: "cost-manager", label: "商品成本管理", icon: "₽", hint: "多店铺 · 成本与自动调价" },
 ];
 

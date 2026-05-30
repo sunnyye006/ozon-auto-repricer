@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
 from app.core.db import SessionLocal
-from app.models import Product, Store
+from app.models import PriceEvent, Product, Store
+
+# price_events 保留天数，超过后由后台任务定期清理，防止表无限膨胀
+PRICE_EVENT_RETENTION_DAYS = 60
 from app.services.app_settings_service import (
     get_auto_sync_interval_minutes,
     get_scan_interval_minutes,
@@ -22,6 +25,7 @@ class SchedulerService:
     """轻量化 tick：每分钟扫描各店状态，符合条件即派发独立后台任务。"""
 
     JOB_ID = "ozon-per-store-tick"
+    CLEANUP_JOB_ID = "ozon-price-events-cleanup"
 
     def __init__(self) -> None:
         self.scheduler = AsyncIOScheduler()
@@ -40,8 +44,25 @@ class SchedulerService:
             coalesce=True,
             max_instances=1,
         )
+        self.scheduler.add_job(
+            self.cleanup_price_events,
+            IntervalTrigger(hours=6),
+            id=self.CLEANUP_JOB_ID,
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
         self.scheduler.start()
         self.started = True
+
+    async def cleanup_price_events(self) -> None:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=PRICE_EVENT_RETENTION_DAYS)
+        async with SessionLocal() as db:
+            try:
+                await db.execute(delete(PriceEvent).where(PriceEvent.created_at < cutoff))
+                await db.commit()
+            except Exception:  # noqa: BLE001
+                await db.rollback()
 
     def update_interval(self, _interval_minutes: int) -> None:
         if not self.started:

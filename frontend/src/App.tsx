@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { api, createEventSource } from "./api/client";
+import { api, createEventSource, setToken } from "./api/client";
 import { DataDimensions } from "./components/DataDimensions";
 import { EventAnalyticsPanel } from "./components/EventAnalyticsPanel";
 import { EventStream } from "./components/EventStream";
+import { Login } from "./components/Login";
 import { ProductCostManager } from "./components/ProductCostManager";
 import { SettingsGearButton } from "./components/SettingsGearButton";
 import { SettingsPage } from "./components/SettingsPage";
 import { SideNav } from "./components/SideNav";
 import type { NavKey } from "./components/SideNav";
 import { StatsCards } from "./components/StatsCards";
-import type { DashboardStats, PriceEvent, Product, Store, ToolSettings } from "./types";
+import type { AuthUser, DashboardStats, PriceEvent, Product, Store, ToolSettings } from "./types";
+
+type SessionUser = { id: number; email: string; role: "admin" | "user" };
 
 const MOCK_STATS: DashboardStats = {
   total_products: 128,
@@ -59,6 +62,10 @@ export default function App() {
   const [toolSettings, setToolSettings] = useState<ToolSettings | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [usingMockData, setUsingMockData] = useState(false);
+  const [authResolved, setAuthResolved] = useState(false);
+  const [authEnabled, setAuthEnabled] = useState(false);
+  const [needLogin, setNeedLogin] = useState(false);
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [activeNav, setActiveNav] = useState<NavKey>("dashboard");
   const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
     try {
@@ -110,6 +117,33 @@ export default function App() {
   }
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await api.me();
+        if (cancelled) return;
+        setAuthEnabled(me.auth_enabled);
+        if (me.auth_enabled && !me.authenticated) {
+          setNeedLogin(true);
+        } else {
+          setNeedLogin(false);
+          if (me.authenticated && me.id != null && me.email && me.role) {
+            setSessionUser({ id: me.id, email: me.email, role: me.role });
+          }
+        }
+      } catch {
+        if (!cancelled) setNeedLogin(false);
+      } finally {
+        if (!cancelled) setAuthResolved(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authResolved || needLogin) return;
     void reloadAll();
     const source = createEventSource();
     source.onmessage = (e) => {
@@ -124,7 +158,8 @@ export default function App() {
       source.close();
     };
     return () => source.close();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authResolved, needLogin, sessionUser?.id]);
 
   function toggleNavCollapsed() {
     setNavCollapsed((prev) => {
@@ -136,6 +171,46 @@ export default function App() {
       }
       return next;
     });
+  }
+
+  function handleLogout() {
+    setToken(null);
+    setStats(null);
+    setStores([]);
+    setProducts([]);
+    setEvents([]);
+    setToolSettings(null);
+    setSessionUser(null);
+    setNeedLogin(true);
+  }
+
+  if (!authResolved) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          color: "#12263f",
+          fontSize: 16,
+          background: "linear-gradient(180deg, #f0f8ff 0%, #f8fbff 35%, #f9f5ff 100%)",
+        }}
+      >
+        加载中…
+      </div>
+    );
+  }
+
+  if (needLogin) {
+    return (
+      <Login
+        onAuthed={(u) => {
+          setSessionUser({ id: u.id, email: u.email, role: u.role });
+          setNeedLogin(false);
+        }}
+      />
+    );
   }
 
   return (
@@ -193,7 +268,30 @@ export default function App() {
                   </span>
                 )}
               </div>
-              <SettingsGearButton onClick={() => setSettingsOpen(true)} />
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {authEnabled && sessionUser && (
+                  <>
+                    <span style={{ color: "#5b6b85", fontSize: 13 }}>{sessionUser.email}</span>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      style={{
+                        border: "1px solid #c5d7ff",
+                        borderRadius: 8,
+                        padding: "6px 12px",
+                        background: "#fff",
+                        color: "#2b5fcc",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        fontSize: 13,
+                      }}
+                    >
+                      退出登录
+                    </button>
+                  </>
+                )}
+                <SettingsGearButton onClick={() => setSettingsOpen(true)} />
+              </div>
             </header>
 
             {activeNav === "dashboard" && (
@@ -234,6 +332,7 @@ export default function App() {
         <SettingsPage
           stores={stores}
           toolSettings={toolSettings}
+          isAdmin={authEnabled ? sessionUser?.role === "admin" : false}
           onClose={() => setSettingsOpen(false)}
           onStoreChanged={reloadAll}
           onProductsChanged={reloadProducts}

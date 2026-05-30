@@ -36,6 +36,7 @@ STORE_ADDITIONS = {
     "scan_interval_minutes": ("INTEGER NOT NULL DEFAULT 10", "INTEGER NOT NULL DEFAULT 10"),
     "last_synced_at": ("TIMESTAMPTZ", "TIMESTAMP"),
     "last_scanned_at": ("TIMESTAMPTZ", "TIMESTAMP"),
+    "owner_id": ("BIGINT", "INTEGER"),
 }
 
 PRODUCT_ADDITIONS = {
@@ -80,3 +81,8 @@ async def run_migrations() -> None:
 
         await add_columns("stores", STORE_ADDITIONS)
         await add_columns("products", PRODUCT_ADDITIONS)
+
+        # price_events 随时间无限增长，给时间列加索引以支撑清理与按时间查询
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_price_events_created_at ON price_events (created_at)")
+        )

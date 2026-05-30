@@ -32,6 +32,7 @@ type IntervalCardProps = {
   current: number | undefined;
   presetOptions: number[];
   saving: boolean;
+  saved: boolean;
   selected: string;
   customMinutes: string;
   onSelectChange: (value: string) => void;
@@ -45,6 +46,7 @@ function IntervalCard({
   current,
   presetOptions,
   saving,
+  saved,
   selected,
   customMinutes,
   onSelectChange,
@@ -85,15 +87,20 @@ function IntervalCard({
           onClick={onSave}
           disabled={saving}
           style={{
-            border: "1px solid #4f8cff",
+            border: saved ? "1px solid #1a9f5b" : "1px solid #4f8cff",
             borderRadius: 7,
-            padding: "6px 12px",
+            padding: "6px 14px",
             color: "#fff",
-            background: "linear-gradient(135deg, #4f8cff, #6d5efc)",
-            cursor: "pointer",
+            background: saved
+              ? "linear-gradient(135deg, #19b36b, #12a85f)"
+              : "linear-gradient(135deg, #4f8cff, #6d5efc)",
+            cursor: saving ? "not-allowed" : "pointer",
+            opacity: saving ? 0.75 : 1,
+            transition: "background 0.2s ease",
+            minWidth: 88,
           }}
         >
-          保存
+          {saving ? "保存中…" : saved ? "已保存 ✓" : "保存"}
         </button>
       </div>
       {hint && <small style={{ display: "block", marginTop: 6, color: "#666" }}>{hint}</small>}
@@ -109,13 +116,21 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onProducts
   const [scanSelected, setScanSelected] = useState<string>("10");
   const [scanCustom, setScanCustom] = useState<string>("");
   const [savingScan, setSavingScan] = useState(false);
+  const [savedScan, setSavedScan] = useState(false);
 
   const [syncSelected, setSyncSelected] = useState<string>("60");
   const [syncCustom, setSyncCustom] = useState<string>("");
   const [savingSync, setSavingSync] = useState(false);
+  const [savedSync, setSavedSync] = useState(false);
 
   const [priceStep, setPriceStep] = useState<string>("0.1");
   const [savingRules, setSavingRules] = useState(false);
+  const [savedRules, setSavedRules] = useState(false);
+
+  function flash(setSaved: (v: boolean) => void) {
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1800);
+  }
 
   useEffect(() => {
     if (!toolSettings) return;
@@ -156,6 +171,7 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onProducts
     try {
       const latest = await api.updateScanInterval(minutes);
       onSettingsChanged(latest);
+      flash(setSavedScan);
     } catch (err) {
       alert(err instanceof Error ? err.message : "保存失败");
     } finally {
@@ -173,6 +189,7 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onProducts
     try {
       const latest = await api.updateAutoSyncInterval(minutes);
       onSettingsChanged(latest);
+      flash(setSavedSync);
     } catch (err) {
       alert(err instanceof Error ? err.message : "保存失败");
     } finally {
@@ -190,6 +207,9 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onProducts
     try {
       const latest = await api.updateRepricingRules({ price_step: step });
       onSettingsChanged(latest);
+      flash(setSavedRules);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "保存失败");
     } finally {
       setSavingRules(false);
     }
@@ -209,6 +229,7 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onProducts
           current={toolSettings?.scan_interval_minutes}
           presetOptions={scanPresets}
           saving={savingScan}
+          saved={savedScan}
           selected={scanSelected}
           customMinutes={scanCustom}
           onSelectChange={setScanSelected}
@@ -221,6 +242,7 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onProducts
           current={toolSettings?.auto_sync_interval_minutes}
           presetOptions={syncPresets}
           saving={savingSync}
+          saved={savedSync}
           selected={syncSelected}
           customMinutes={syncCustom}
           onSelectChange={setSyncSelected}
@@ -291,15 +313,20 @@ export function SettingsPanel({ stores, toolSettings, onStoreChanged, onProducts
           disabled={savingRules}
           style={{
             marginTop: 10,
-            border: "1px solid #4f8cff",
+            border: savedRules ? "1px solid #1a9f5b" : "1px solid #4f8cff",
             borderRadius: 7,
-            padding: "6px 12px",
+            padding: "6px 14px",
             color: "#fff",
-            background: "linear-gradient(135deg, #4f8cff, #6d5efc)",
-            cursor: "pointer",
+            background: savedRules
+              ? "linear-gradient(135deg, #19b36b, #12a85f)"
+              : "linear-gradient(135deg, #4f8cff, #6d5efc)",
+            cursor: savingRules ? "not-allowed" : "pointer",
+            opacity: savingRules ? 0.75 : 1,
+            transition: "background 0.2s ease",
+            minWidth: 132,
           }}
         >
-          保存调价规则
+          {savingRules ? "保存中…" : savedRules ? "已保存 ✓" : "保存调价规则"}
         </button>
       </div>
 
