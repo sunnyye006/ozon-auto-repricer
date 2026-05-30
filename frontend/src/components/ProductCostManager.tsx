@@ -57,7 +57,7 @@ export function ProductCostManager({ products, stores, onProductsChanged }: Prop
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draftCost, setDraftCost] = useState<string>("");
   const [savingId, setSavingId] = useState<number | null>(null);
-  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [autoOverride, setAutoOverride] = useState<Record<number, boolean>>({});
   const [pageSize, setPageSize] = useState<number>(10);
   const [page, setPage] = useState<number>(1);
 
@@ -121,16 +121,22 @@ export function ProductCostManager({ products, stores, onProductsChanged }: Prop
     }
   }
 
-  async function toggleAutoReprice(product: Product, next: boolean) {
-    setTogglingId(product.id);
-    try {
-      await api.toggleAutoReprice(product.id, next);
-      await onProductsChanged();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "切换自动调价失败");
-    } finally {
-      setTogglingId(null);
-    }
+  function toggleAutoReprice(product: Product, next: boolean) {
+    setAutoOverride((prev) => ({ ...prev, [product.id]: next }));
+    void (async () => {
+      try {
+        await api.toggleAutoReprice(product.id, next);
+        await onProductsChanged();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "切换自动调价失败");
+      } finally {
+        setAutoOverride((prev) => {
+          const nextState = { ...prev };
+          delete nextState[product.id];
+          return nextState;
+        });
+      }
+    })();
   }
 
   const storeCounts = useMemo(() => {
@@ -268,8 +274,7 @@ export function ProductCostManager({ products, stores, onProductsChanged }: Prop
                       </td>
                       <td style={{ padding: "8px" }}>
                         <ToggleSwitch
-                          checked={product.auto_reprice_enabled}
-                          disabled={togglingId === product.id}
+                          checked={autoOverride[product.id] ?? product.auto_reprice_enabled}
                           onChange={(v) => toggleAutoReprice(product, v)}
                         />
                       </td>

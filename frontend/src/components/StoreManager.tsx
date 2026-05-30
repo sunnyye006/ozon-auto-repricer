@@ -85,7 +85,7 @@ export function StoreManager({ stores, onStoreChanged, onProductsChanged }: Prop
   const [savingEditId, setSavingEditId] = useState<number | null>(null);
   const [syncingStoreIds, setSyncingStoreIds] = useState<Set<number>>(new Set());
   const [syncProgressByStore, setSyncProgressByStore] = useState<Record<number, SyncProgress>>({});
-  const [togglingStoreId, setTogglingStoreId] = useState<number | null>(null);
+  const [autoOverrideByStore, setAutoOverrideByStore] = useState<Record<number, boolean>>({});
 
   function runSyncDetached(storeId: number) {
     setSyncingStoreIds((prev) => {
@@ -179,17 +179,23 @@ export function StoreManager({ stores, onStoreChanged, onProductsChanged }: Prop
     }
   }
 
-  async function toggleStoreAutoReprice(store: Store, nextValue: boolean) {
-    setTogglingStoreId(store.id);
-    try {
-      await api.updateStore(store.id, { auto_reprice_enabled: nextValue });
-      await onStoreChanged();
-      await onProductsChanged();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "切换店铺自动调价失败");
-    } finally {
-      setTogglingStoreId(null);
-    }
+  function toggleStoreAutoReprice(store: Store, nextValue: boolean) {
+    setAutoOverrideByStore((prev) => ({ ...prev, [store.id]: nextValue }));
+    void (async () => {
+      try {
+        await api.updateStore(store.id, { auto_reprice_enabled: nextValue });
+        await onStoreChanged();
+        await onProductsChanged();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "切换店铺自动调价失败");
+      } finally {
+        setAutoOverrideByStore((prev) => {
+          const nextState = { ...prev };
+          delete nextState[store.id];
+          return nextState;
+        });
+      }
+    })();
   }
 
   return (
@@ -285,17 +291,21 @@ export function StoreManager({ stores, onStoreChanged, onProductsChanged }: Prop
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-                        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: "#415472" }}>
-                          店铺自动调价
-                          <ToggleSwitch
-                            checked={store.auto_reprice_enabled}
-                            disabled={togglingStoreId === store.id}
-                            onChange={(v) => toggleStoreAutoReprice(store, v)}
-                          />
-                          <span style={{ fontSize: 12, color: store.auto_reprice_enabled ? "#1a7f37" : "#999" }}>
-                            {store.auto_reprice_enabled ? "已开启" : "已关闭"}
-                          </span>
-                        </label>
+                        {(() => {
+                          const autoChecked = autoOverrideByStore[store.id] ?? store.auto_reprice_enabled;
+                          return (
+                            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: "#415472" }}>
+                              店铺自动调价
+                              <ToggleSwitch
+                                checked={autoChecked}
+                                onChange={(v) => toggleStoreAutoReprice(store, v)}
+                              />
+                              <span style={{ fontSize: 12, color: autoChecked ? "#1a7f37" : "#999" }}>
+                                {autoChecked ? "已开启" : "已关闭"}
+                              </span>
+                            </label>
+                          );
+                        })()}
                         <button
                           onClick={() => startEdit(store)}
                           style={{ border: "1px solid #c5d7ff", borderRadius: 7, padding: "6px 14px", background: "#fff", color: "#2b5fcc", cursor: "pointer" }}

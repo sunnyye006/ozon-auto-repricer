@@ -213,7 +213,12 @@ export default function App() {
                   }}
                 >
                   <EventStream events={sortedEvents.slice(0, 100)} />
-                  <EventAnalyticsPanel events={sortedEvents.slice(0, 100)} topRatio={stats?.top_price_capture_ratio ?? 0} />
+                  <EventAnalyticsPanel
+                    events={sortedEvents.slice(0, 100)}
+                    topRatio={stats?.top_price_capture_ratio ?? 0}
+                    products={products}
+                    stats={stats}
+                  />
                 </section>
               </>
             )}

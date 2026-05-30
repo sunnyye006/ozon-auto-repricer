@@ -114,14 +114,12 @@ export function EventStream({ events }: Props) {
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         {[
-          { id: "all", label: "全部" },
-          { id: "up", label: "调涨" },
-          { id: "down", label: "调降" },
-          { id: "down", label: "抢占最优价" },
-          { id: "up", label: "未占最优价" },
+          { id: "all", label: `全部 (${events.length})` },
+          { id: "down", label: `调降 (${events.filter((e) => e.direction === "↓").length})` },
+          { id: "up", label: `调涨 (${events.filter((e) => e.direction === "↑").length})` },
         ].map((item) => (
           <button
-            key={`${item.id}-${item.label}`}
+            key={item.id}
             onClick={() => setFilter(item.id as "all" | "down" | "up")}
             style={{
               border: filter === item.id ? "1px solid #4f8cff" : "1px solid #c9d8ff",
